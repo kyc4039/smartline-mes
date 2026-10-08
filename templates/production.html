@@ -1,0 +1,274 @@
+{% extends "base.html" %}
+{% block head %}
+<script src="/static/flow.js"></script><script>window.FLOW_ON = {{ flow_v2|tojson }}; if (FLOW_ON) FLOW.start();</script>
+<style>
+/* 생산관리 페이지 전용 */
+.hero{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:16px}
+.cur{border-color:#2A6B8E;background:linear-gradient(135deg,#10202A 0%,var(--panel) 60%)}
+.pbig{font-family:var(--mono);font-weight:600}
+.kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+/* 오른쪽 KPI 4칸: 트럭 칸과 높이가 같아 생기는 빈 곳을 큰 글씨로 채움 */
+.kpis .kc{align-items:center;padding:18px 20px;gap:18px}
+.kpis .kc .ic{width:60px;height:60px;font-size:28px;border-radius:14px}
+.kpis .kc .l{font-size:14px}.kpis .kc .v{font-size:40px;line-height:1.15;margin:4px 0}.kpis .kc .v small{font-size:16px}
+.kpis .kc .d{font-size:13px;white-space:normal;line-height:1.5}.kpis .pbar{margin:4px 0 6px;height:12px}
+.kpi2{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.kpi2 .v{font-family:var(--mono);font-size:28px;font-weight:600}
+.k4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.k4 .kpi2{padding:10px 14px}.k4 .pbig{font-size:24px}
+.pbar{height:10px;border-radius:5px;background:#26323A;position:relative}
+.pbar i{position:absolute;left:0;top:0;bottom:0;border-radius:5px}
+.pbar .mk{position:absolute;top:-5px;width:2px;height:20px;background:#F5B544}
+.ptable{width:100%;border-collapse:collapse;font-size:13px}
+.ptable th{text-align:left;color:var(--muted);font-weight:500;font-size:12px;padding:8px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel);z-index:1}
+.ptable td{padding:9px 8px;border-bottom:1px solid var(--line);cursor:pointer}
+.ptable .r{text-align:right}.ptable tr.sel td{background:#0F2A38}.ptable tr:hover td{background:var(--panel2)}
+.ptable .mono{font-family:var(--mono)}
+.tablebox{max-height:560px;overflow:auto}
+.chip{display:inline-block;font-size:11px;padding:0 7px;border-radius:10px;border:1px solid #F5B544;color:#FFD58A;margin-left:4px}
+.lst{display:flex;flex-direction:column;gap:7px;font-size:13px}
+.lst>div{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;background:var(--panel2);border-radius:8px;padding:9px 12px}
+.sec{font-weight:600;margin:4px 0 8px;font-size:14px}
+.leg{display:flex;gap:14px;font-size:12px;color:var(--muted);flex-wrap:wrap}.leg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.lot-run{background:#0F2A38;border:1px solid #2A6B8E;color:#A8E2FF}
+.stackbar{height:14px;border-radius:7px;overflow:hidden;display:flex;background:#26323A}.stackbar i{display:block;height:100%}
+.g2{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:16px}
+@media (max-width:1100px){.hero,.g2{grid-template-columns:minmax(0,1fr)}.k4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style>
+{% endblock %}
+{% block body %}
+<div class="pg-head">
+  <h1>생산 관리 · LOT 출하</h1>
+  <span class="sub">양품 8개 = 1팔레트 → 10팔레트 = 트럭 1대 = LOT 1개 출하</span>
+  <div class="right"><a class="pg-chip" href="/api/production/export.csv">⬇ LOT 목록 CSV</a></div>
+</div>
+
+<!-- ① 적재 중 LOT (트럭 그림) · ② 오늘 KPI -->
+<div class="hero">
+  <section class="panel cur" aria-label="적재 중 LOT">
+    <div class="row">
+      <div><div class="small" style="color:#A8E2FF" id="curHint">적재 중 LOT</div>
+        <div style="font-size:26px;font-weight:700"><span id="curId">-</span> <span class="muted" style="font-size:15px;font-weight:500" id="curStart"></span></div></div>
+      <div style="text-align:right"><div class="small muted">트럭 출발까지</div><div class="pbig" style="font-size:34px;color:#FFD58A" id="curLeft">-</div><div class="small muted" id="curEta"></div></div>
+    </div>
+    <div id="truck"></div>
+    <div class="k4">
+      <div class="kpi2"><span class="small muted">생산</span><span class="pbig" id="cTotal">-</span></div>
+      <div class="kpi2"><span class="small muted">양품</span><span class="pbig" id="cGood">-</span></div>
+      <div class="kpi2"><span class="small muted">불량</span><span class="pbig c-bad" id="cBad">-</span></div>
+      <div class="kpi2"><span class="small muted">걸린 시간</span><span class="pbig" id="cDur">-</span><span class="small" id="cDurSub"></span></div>
+    </div>
+  </section>
+  <div class="kpis">
+    <div class="kc"><div class="ic ic-data">▤</div><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px"><div class="l" id="kPlanLbl">계획 생산 · 예측</div><div class="v" id="kProd">-</div>
+      <div class="pbar"><i id="pbF" style="background:#4CC3FF33"></i><i id="pbD" style="background:#4CC3FF"></i><span class="mk" style="left:calc(100% - 2px)"></span></div>
+      <div class="d" id="kFc"></div></div></div>
+    <div class="kc"><div class="ic ic-ok">✓</div><div style="min-width:0"><div class="l">양품률 (오늘)</div><div class="v" id="kYield">-</div><div class="d" id="kYieldSub"></div></div></div>
+    <div class="kc"><div class="ic ic-mut">🚚</div><div style="min-width:0"><div class="l">출발한 트럭</div><div class="v"><span id="kTr">-</span><small>대</small></div><div class="d" id="kTrSub"></div></div></div>
+    <div class="kc"><div class="ic ic-warn">■</div><div style="min-width:0"><div class="l">정지로 잃은 생산 (오늘)</div><div class="v c-warn" id="kLoss">-</div><div class="d" id="kLossSub"></div></div></div>
+  </div>
+</div>
+
+<!-- ③ 오늘 생산 흐름: 시간별 막대 + 누적 실적/목표/예측 -->
+<section class="panel" aria-label="오늘 생산 흐름">
+  <div class="row"><h2>오늘 생산 흐름 <span class="small muted" id="flowLbl"></span></h2>
+    <div class="leg"><span><i style="background:#4CC3FF"></i>시간별 양품</span><span><i style="background:#F0605D"></i>불량</span><span><i style="background:#3CC6A8;height:3px"></i>누적 실적</span><span><i style="background:#F5B544;height:3px"></i>누적 목표</span><span><i style="background:#3CC6A8;height:3px;opacity:.45"></i>예측</span></div></div>
+  <div id="flow"></div>
+</section>
+
+<!-- ④ 트럭 출발 타임라인 -->
+<section class="panel" aria-label="트럭 출발 타임라인">
+  <div class="row"><h2>트럭 출발 타임라인 <span class="small muted">LOT 하나 = 칸 하나 · 길이 = 걸린 시간 · 누르면 상세</span></h2>
+    <div class="leg"><span><i style="background:#3CC6A8"></i>목표 속도의 70% 이상</span><span><i style="background:#F5B544"></i>40~70%</span><span><i style="background:#F0605D"></i>40% 미만</span><span>▼ 정지</span></div></div>
+  <div id="tl"></div>
+</section>
+
+<!-- ⑤ LOT 목록 · ⑥ LOT 상세 -->
+<div class="g2">
+  <section class="panel" aria-label="LOT 목록">
+    <div class="row"><h2>LOT 목록 <span class="small muted" id="lotCount"></span></h2><a class="btn" href="/api/production/export.csv" style="min-height:32px;font-size:12px">⬇ CSV (엑셀)</a></div>
+    <div class="tablebox"><table class="ptable"><thead><tr><th>LOT</th><th>시작 → 출발</th><th style="width:170px">걸린 시간 <span class="muted" id="thTarget"></span></th><th class="r">양품</th><th class="r">불량률</th><th class="r">정지</th><th>상태</th></tr></thead>
+      <tbody id="lotRows"><tr><td colspan="7" class="muted">불러오는 중…</td></tr></tbody></table></div>
+  </section>
+  <section class="panel" aria-label="LOT 상세" id="detail"></section>
+</div>
+
+<script>
+let P = null, pick = null;
+const n = v => v == null ? "-" : Math.round(v).toLocaleString();
+const ms = s => { s = Math.max(0, Math.round(s)); return s >= 3600 ? `${Math.floor(s / 3600)}:${String(Math.floor(s % 3600 / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}` : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
+const dmin = s => s < 60 ? Math.round(s) + "초" : Math.round(s / 60) + "분";
+const spCol = v => v == null ? "#2E8FC2" : v >= 0.7 ? "#3CC6A8" : v >= 0.4 ? "#F5B544" : "#F0605D";
+const badge = l => l.status === "적재 중" ? `<span class="badge lot-run">적재 중</span>` : `<span class="badge t-ok">출하 완료</span>`;
+const CAUSE_COL = ["#F0605D", "#F5B544", "#B07CFF", "#4CC3FF"];
+
+function load() { fetch("/api/production").then(r => r.json()).then(d => { P = d; draw(); }).catch(() => {}); }
+
+function draw() {
+  drawCurrent(); drawKpis(); drawFlow(); drawTimeline(); drawRows(); drawDetail();
+}
+
+// ① 적재 중 LOT: 트럭 짐칸 그림 (팔레트 칸 TRUCK_PALLETS개)
+function drawCurrent() {
+  if (!P) return;
+  let c = P.current; const N = P.truck_pallets, S = P.pallet_size;
+  // 새 흐름(FLOW_V2): 지금 트럭은 라인 장부 기준 → 트윈 · 대시보드와 같은 순간 같은 숫자 (오늘 합계 · 이력은 DB)
+  const fc = window.FLOW_ON && FLOW.ready() ? FLOW.counts() : null;
+  if (fc) {
+    const base = (P.lots || []).find(l => l.id === fc.lot) || c;
+    const inLot = fc.placed - (fc.lot_seq - 1) * P.lot_good;
+    c = Object.assign({}, base, {pallets: fc.onTruck, pallet_fill: fc.departing ? 0 : fc.fill,
+      left_pallets: Math.max(0, N - fc.onTruck), left_good: fc.departing ? 0 : Math.max(0, P.lot_good - inLot)});
+  }
+  curHint.innerHTML = `적재 중 LOT · 트럭 1대 = ${N}팔레트 = 양품 ${P.lot_good}개` + (P.sim ? ` <span class="chip">시뮬레이션 데이터</span>` : "");
+  curId.textContent = "LOT " + c.id; curStart.textContent = hm(c.start) + " 시작";
+  curLeft.textContent = `${c.left_pallets}팔레트`;
+  curEta.textContent = `양품 ${c.left_good}개 남음 · 약 ${ms(c.eta_sec)} (${c.eta_basis})`;
+  if (fc) {
+    const st = FLOW.status();
+    curEta.textContent = fc.departing ? `🚚 트럭 출발 중 · LOT ${fc.lot}` : `양품 ${c.left_good}개 남음 · 약 ${ms(c.eta_sec)}`
+      + (fc.in_flight ? ` · 벨트 위 ${fc.in_flight}개` : "") + (st && st.kind !== "ok" ? ` · ${st.text}` : "");
+  }
+  const W = 900, cx = 20, slot = Math.min(55, 540 / N), cw = slot * N + 16;
+  let s = `<rect x="${cx}" y="10" width="${cw}" height="78" rx="8" fill="#1B242A" stroke="#3A4852" stroke-width="2"/>`;
+  for (let i = 0; i < N; i++) {
+    const x = cx + 8 + i * slot, w = slot - 7, full = i < c.pallets, part = i === c.pallets ? c.pallet_fill / S : 0;
+    s += `<rect x="${x}" y="18" width="${w}" height="62" rx="5" fill="#26323A"/>`;
+    if (full) s += `<rect x="${x}" y="18" width="${w}" height="62" rx="5" fill="#F5B544"/><rect x="${x + 4}" y="22" width="${w / 2 - 6}" height="26" fill="#FFD58A" opacity=".55"/><rect x="${x + w / 2 + 2}" y="22" width="${w / 2 - 6}" height="26" fill="#FFD58A" opacity=".55"/><rect x="${x + 4}" y="52" width="${w / 2 - 6}" height="24" fill="#C98A33" opacity=".5"/><rect x="${x + w / 2 + 2}" y="52" width="${w / 2 - 6}" height="24" fill="#C98A33" opacity=".5"/>`;
+    if (part > 0) s += `<rect x="${x}" y="${18 + 62 * (1 - part)}" width="${w}" height="${62 * part}" rx="5" fill="#F5B544" opacity=".55"/><text x="${x + w / 2}" y="56" text-anchor="middle" font-size="12" fill="#FFE9B8" font-weight="700">${c.pallet_fill}/${S}</text>`;
+    s += `<text x="${x + w / 2}" y="101" text-anchor="middle" font-size="10" fill="#93A3AD">${i + 1}</text>`;
+  }
+  const hx = cx + cw;
+  s += `<path d="M${hx} 30 h70 l40 30 v28 h-110 z" fill="#2E5FA8" stroke="#3E7BD6" stroke-width="2"/><rect x="${hx + 12}" y="38" width="44" height="22" rx="3" fill="#9FD3F5"/>`;
+  [cx + 60, hx + 60].forEach(x => s += `<circle cx="${x}" cy="94" r="13" fill="#151C21" stroke="#56646C" stroke-width="3"/><circle cx="${x}" cy="94" r="5" fill="#7C8A93"/>`);
+  s += `<text x="${hx + 130}" y="62" font-size="13" fill="#93A3AD">→ ${N}칸이 차면 출발</text>`;
+  truck.innerHTML = `<svg viewBox="0 0 ${W} 112" style="width:100%;display:block;margin:6px 0" font-family="IBM Plex Sans KR, sans-serif" role="img" aria-label="트럭 적재 ${c.pallets}/${N}팔레트">${s}</svg>`;
+  cTotal.textContent = n(c.total); cGood.textContent = n(c.good);
+  cBad.innerHTML = `${c.defects} <span class="small muted">${c.rate == null ? "" : pctTxt(c.rate)}</span>`;
+  const over = c.duration > P.target_lot_sec;
+  cDur.textContent = ms(c.duration); cDur.className = "pbig " + (over ? "c-warn" : "");
+  cDurSub.innerHTML = `<span class="muted">목표 ${ms(P.target_lot_sec)}</span>` + (c.loss ? ` · <span class="c-warn">정지 ${dmin(c.down_sec)} · 약 ${c.loss}개 손실</span>` : "");
+}
+
+// ② 오늘 KPI 4칸
+function drawKpis() {
+  const t = P.today, pl = P.plan, gap = pl.target ? pl.forecast / pl.target - 1 : 0;
+  kPlanLbl.textContent = `계획 생산 · 예측 (${pl.label})`;
+  kProd.textContent = n(pl.done);
+  pbD.style.width = Math.min(100, pl.done / pl.target * 100) + "%"; pbF.style.width = Math.min(100, pl.forecast / pl.target * 100) + "%";
+  const ended = P.now >= pl.end;
+  kFc.innerHTML = `${ended ? "계획 시간 종료 · 최종" : "지금 속도면 마감"} <b>${n(pl.forecast)}개</b> · 목표 ${n(pl.target)} 대비 <b class="${gap >= -0.05 ? "c-ok" : "c-bad"}">${gap >= 0 ? "+" : ""}${Math.round(gap * 100)}%</b>`;
+  const y = t.total ? 1 - t.rate : null;
+  kYield.textContent = y == null ? "-" : (y * 100).toFixed(1) + "%";
+  kYield.className = "v " + (t.rate != null && t.rate <= 0.03 ? "c-ok" : "c-warn");
+  kYieldSub.textContent = `불량 ${n(t.defects)}개 · 기준 불량률 3.0% ${t.rate != null && t.rate <= 0.03 ? "이하 ✓" : "초과"}`;
+  kTr.textContent = n(window.FLOW_ON && FLOW.ready() ? FLOW.counts().trucks_out : t.trucks);   // 새 흐름: 트럭이 실제로 출발한 수 kTrSub.textContent = `출하 ${n(t.shipped_pallets)} 팔레트 · 양품 ${n(t.shipped_good)}개`;
+  kLoss.innerHTML = `≈ ${n(t.loss)}<span class="small muted"> 개</span>`;
+  const top = Object.entries(t.causes)[0];
+  kLossSub.textContent = t.down_sec ? `라인 정지 ${dmin(t.down_sec)}` + (top ? ` · ${top[0]} ${dmin(top[1])}이 가장 큼` : "") : "오늘 라인 정지 없음";
+}
+
+// ③ 오늘 생산 흐름
+function drawFlow() {
+  // 실제 칸 너비로 그림 (화면이 넓어도 키가 커지지 않게 · 높이 고정)
+  const hs = P.hours, pl = P.plan, W = Math.max(700, flow.clientWidth || 1200), H = 200, L = 56, R = W - 64, B = 168, TP = 18;
+  flowLbl.textContent = `${hm(pl.start)}~${hm(pl.end)} 계획 · 목표 ${n(P.target_per_hour)}개/시간`;
+  if (!hs.length) { flow.innerHTML = `<div class="empty">아직 오늘 생산 기록이 없어요</div>`; return; }
+  const t0 = hs[0].start, t1 = hs[hs.length - 1].start + 3600, X = ts => L + (ts - t0) / (t1 - t0) * (R - L);
+  const maxH = Math.max(P.target_per_hour * 1.1, ...hs.map(h => h.total)), yb = v => B - v / maxH * (B - TP);
+  const maxC = Math.max(pl.target, pl.forecast, 1) * 1.08, yc = v => B - v / maxC * (B - TP);
+  let s = "";
+  for (let i = 0; i <= 4; i++) { const v = maxH * i / 4; s += `<line x1="${L}" x2="${R}" y1="${yb(v)}" y2="${yb(v)}" stroke="#1E2A31"/><text x="${L - 8}" y="${yb(v) + 4}" text-anchor="end" font-size="11" fill="#93A3AD">${n(v)}</text>`; }
+  for (let i = 0; i <= 3; i++) { const v = maxC * i / 3; s += `<text x="${R + 8}" y="${yc(v) + 4}" font-size="11" fill="#7FE3C8">${n(v)}</text>`; }
+  const step = (R - L) / hs.length, bw = step * 0.56;
+  hs.forEach((h, i) => {
+    const bx = L + step * i + (step - bw) / 2;
+    if (!h.future) {
+      s += `<rect x="${bx}" y="${yb(h.good)}" width="${bw}" height="${B - yb(h.good)}" rx="3" fill="${h.current ? "#2E8FC2" : "#4CC3FF"}" opacity=".85"><title>${new Date(h.start * 1000).getHours()}시 · 생산 ${h.total} · 불량 ${h.defects}${h.down_sec ? " · 정지 " + dmin(h.down_sec) : ""}</title></rect>`;
+      s += `<rect x="${bx}" y="${yb(h.total)}" width="${bw}" height="${yb(h.good) - yb(h.total)}" fill="#F0605D"/>`;
+      if (h.down_sec >= 120) s += `<text x="${bx + bw / 2}" y="${yb(h.total) - 7}" text-anchor="middle" font-size="11" fill="#FFB3B0">▼ 정지 ${dmin(h.down_sec)}</text>`;
+    }
+    s += `<text x="${L + step * i + step / 2}" y="${B + 18}" text-anchor="middle" font-size="11" fill="#93A3AD">${new Date(h.start * 1000).getHours()}</text>`;
+  });
+  // 누적 목표(계획 시간 안에서 직선) · 누적 실적 · 예측
+  s += `<line x1="${X(pl.start)}" y1="${yc(0)}" x2="${X(pl.end)}" y2="${yc(pl.target)}" stroke="#F5B544" stroke-width="2.5" stroke-dasharray="7 5"/>`;
+  let cum = 0; const pts = [`${X(pl.start)},${yc(0)}`];
+  hs.filter(h => !h.future).forEach(h => { const a = Math.max(h.start, pl.start), b = Math.min(h.start + 3600, P.now, pl.end); if (b <= a) return;
+    cum += h.total * (b - a) / (Math.min(h.start + 3600, P.now) - h.start); pts.push(`${X(b)},${yc(cum)}`); });
+  s += `<polyline points="${pts.join(" ")}" fill="none" stroke="#3CC6A8" stroke-width="3"/>`;
+  if (P.now < pl.end) s += `<line x1="${X(P.now)}" y1="${yc(pl.done)}" x2="${X(pl.end)}" y2="${yc(pl.forecast)}" stroke="#3CC6A8" stroke-width="3" stroke-dasharray="3 6" opacity=".6"/>`;
+  const nx = X(Math.min(P.now, t1));
+  s += `<line x1="${nx}" x2="${nx}" y1="${TP}" y2="${B}" stroke="#A8E2FF" stroke-dasharray="2 4"/><text x="${nx + 6}" y="${TP + 10}" font-size="11" fill="#A8E2FF">지금</text>`;
+  s += `<text x="${X(pl.end) - 4}" y="${yc(pl.target) - 8}" text-anchor="end" font-size="12" fill="#FFD58A">목표 ${n(pl.target)}</text>`;
+  s += `<text x="${X(pl.end) - 4}" y="${yc(pl.forecast) + 18}" text-anchor="end" font-size="12" fill="#7FE3C8">${P.now >= pl.end ? "최종" : "예측"} ${n(pl.forecast)}</text>`;
+  flow.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="width:100%;height:${H}px;display:block" font-family="IBM Plex Sans KR, sans-serif" role="img" aria-label="오늘 생산 흐름">${s}</svg>`;
+}
+
+// ④ 트럭 출발 타임라인
+function drawTimeline() {
+  const T = P.timeline; if (!T.length) { tl.innerHTML = ""; return; }
+  const W = Math.max(700, tl.clientWidth || 1200), L = 40, R = W - 20, t0 = Math.min(P.plan.start, T[0][0]), t1 = Math.max(P.plan.end, P.now);
+  const X = ts => L + (ts - t0) / (t1 - t0) * (R - L);
+  let s = "";
+  for (let h = Math.ceil(t0 / 3600) * 3600; h <= t1; h += 7200) s += `<line x1="${X(h)}" x2="${X(h)}" y1="14" y2="62" stroke="#1E2A31"/><text x="${X(h)}" y="78" text-anchor="middle" font-size="11" fill="#93A3AD">${hm(h)}</text>`;
+  const seqOf = i => i + 1, cur = P.current.seq;
+  T.forEach(([a, b, stops, sp], i) => {
+    const e = b || P.now, x0 = X(a), x1 = X(e), id = `${P.current.id.split("-")[0]}-${String(seqOf(i)).padStart(2, "0")}`, sel = id === pick;
+    s += `<rect x="${x0 + 0.5}" y="24" width="${Math.max(1.5, x1 - x0 - 1)}" height="30" rx="3" fill="${b ? spCol(sp) : "#2E8FC2"}" opacity="${sel ? 1 : .85}" ${sel ? 'stroke="#E7EDF0" stroke-width="2"' : ""} style="cursor:pointer" onclick="choose('${id}')"><title>LOT ${id} · ${hm(a)}→${b ? hm(b) : "적재 중"} · ${ms(e - a)}${stops ? " · 정지 " + stops + "회" : ""}</title></rect>`;
+    if (stops) s += `<text x="${(x0 + x1) / 2}" y="20" text-anchor="middle" font-size="10" fill="#FFB3B0">▼</text>`;
+    if (sel) s += `<text x="${(x0 + x1) / 2}" y="12" text-anchor="middle" font-size="11" font-weight="700" fill="#E7EDF0">LOT ${seqOf(i)} ▾</text>`;
+  });
+  s += `<line x1="${X(P.now)}" x2="${X(P.now)}" y1="14" y2="62" stroke="#A8E2FF" stroke-width="2"/><text x="${X(P.now) - 5}" y="76" text-anchor="end" font-size="11" fill="#A8E2FF">지금</text>`;
+  tl.innerHTML = `<svg viewBox="0 0 ${W} 86" width="${W}" height="86" style="width:100%;height:86px;display:block" font-family="IBM Plex Sans KR, sans-serif" role="img" aria-label="트럭 출발 타임라인">${s}</svg>`;
+}
+
+// ⑤ LOT 목록
+function drawRows() {
+  lotCount.textContent = `${P.today.trucks}대 출발 · 1대 적재 중`;
+  thTarget.textContent = `(목표 ${ms(P.target_lot_sec)})`;
+  if (!pick || !P.lots.some(l => l.id === pick)) pick = (P.lots[1] || P.lots[0]).id;
+  const span = P.target_lot_sec * 4;
+  lotRows.innerHTML = P.lots.map(l => {
+    const w = Math.min(100, l.duration / span * 100), tw = P.target_lot_sec / span * 100;
+    return `<tr class="${l.id === pick ? "sel" : ""}" onclick="choose('${l.id}')">
+      <td class="mono">…-${l.id.split("-")[1]}${l.sim_ratio > 0.5 ? '<span class="chip">시뮬</span>' : ""}</td>
+      <td class="mono">${hm(l.start)} → ${l.end ? hm(l.end) : "적재 중"}</td>
+      <td><div style="display:flex;align-items:center;gap:8px"><div class="pbar" style="flex:1;height:8px"><i style="width:${w}%;background:${l.end ? spCol(l.speed) : "#2E8FC2"}"></i><span class="mk" style="left:${tw}%;height:16px;top:-4px"></span></div><span class="mono small">${ms(l.duration)}</span></div></td>
+      <td class="mono r">${l.good}${l.end ? "" : "/" + P.lot_good}</td>
+      <td class="mono r ${l.rate > 0.03 ? "c-warn" : ""}">${l.rate == null ? "-" : pctTxt(l.rate)}</td>
+      <td class="mono r">${l.stops ? `<span class="c-warn">${l.stops}회 · ${dmin(l.down_sec)}</span>` : "-"}</td>
+      <td>${badge(l)}</td></tr>`; }).join("");
+}
+
+function choose(id) { pick = id; drawTimeline(); drawRows(); drawDetail(); }
+
+// ⑥ LOT 상세
+function drawDetail() {
+  const l = P.lots.find(v => v.id === pick);
+  if (!l) { detail.innerHTML = `<div class="empty">LOT을 고르면 상세가 나와요 (오늘 최근 ${P.lots.length}개까지)</div>`; return; }
+  const dur = l.duration, causes = Object.entries(l.causes), run = Math.max(0, dur - l.down_sec);
+  const segs = [[run, "#3CC6A8", "가동"]].concat(causes.map(([k, v], i) => [v, CAUSE_COL[i % 4], k + " 정지"]));
+  const types = Object.entries(l.types);
+  detail.innerHTML = `
+    <div class="row"><div><div class="small muted">LOT 상세 · ${hm(l.start)} → ${l.end ? hm(l.end) : "적재 중"}</div>
+      <div style="font-size:22px;font-weight:700">${l.id} <span style="vertical-align:4px">${badge(l)}</span></div></div>
+      <a class="btn primary" style="min-height:36px;font-size:13px" href="/quality?lot=${encodeURIComponent(l.id)}">🔍 이 LOT 검사 이력 →</a></div>
+    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+      <div class="kpi2" style="padding:10px 12px"><span class="small muted">양품 / 생산</span><span class="pbig" style="font-size:22px">${l.good}<span class="small muted"> / ${l.total}</span></span></div>
+      <div class="kpi2" style="padding:10px 12px"><span class="small muted">걸린 시간</span><span class="pbig ${dur > P.target_lot_sec * 1.5 ? "c-bad" : dur > P.target_lot_sec ? "c-warn" : "c-ok"}" style="font-size:22px">${ms(dur)}</span><span class="small muted">목표 ${ms(P.target_lot_sec)}${dur > P.target_lot_sec ? " · +" + ms(dur - P.target_lot_sec) : ""}</span></div>
+      <div class="kpi2" style="padding:10px 12px"><span class="small muted">불량률</span><span class="pbig ${l.rate > 0.03 ? "c-warn" : ""}" style="font-size:22px">${l.rate == null ? "-" : pctTxt(l.rate)}</span><span class="small muted">기준 3.0%</span></div></div>
+    <div><div class="sec">늦어진 이유 <span class="small muted">${l.down_sec ? `라인 정지 ${dmin(l.down_sec)} → 약 ${l.loss}개 손실` : "라인 정지 없음"}</span></div>
+      <div class="stackbar">${segs.filter(g => g[0] > 0).map(([v, c]) => `<i style="width:${v / dur * 100}%;background:${c}"></i>`).join("")}</div>
+      <div class="leg" style="margin:6px 0 8px">${segs.filter(g => g[0] > 0).map(([v, c, t]) => `<span><i style="background:${c}"></i>${esc(t)} ${Math.round(v / dur * 100)}%</span>`).join("")}</div>
+      <div class="lst">${l.stop_list.length ? l.stop_list.map(e => `<div><span class="c-${tone(e.status)}">${shape(e.status)} ${esc(e.equipment)} ${esc(e.status)}${e.reason ? " · " + esc(e.reason) : ""}</span><span class="mono">${hm(e.ts)} · ${dmin(e.dur)}${e.open ? " (진행 중)" : ""}</span><span class="mono c-warn">−${e.loss}개</span></div>`).join("") : `<div class="muted">정지 없음</div>`}</div></div>
+    <div><div class="sec">불량 종류</div>
+      <div class="lst">${types.length ? types.map(([k, v]) => `<div><span>${esc(k)}</span><span class="mono c-bad">${v}</span><span></span></div>`).join("") : `<div class="muted">불량 없음</div>`}</div></div>
+    <div class="small muted">${l.end ? `출하 ${time(l.end)}` : `출발 예정 약 ${ms(P.current.eta_sec)} 뒤`} · ${l.pallets}팔레트 (팔레트당 ${P.pallet_size}개) · ${l.sim_ratio > 0 ? `시뮬레이션 기록 ${Math.round(l.sim_ratio * 100)}%` : "카메라 기록 100%"} · 손실 = 정지 시간 ÷ 목표 ${P.target_cycle}초</div>`;
+}
+
+poll(() => {});                  // 머리글(라인 상태 · 위험 경고)만 1초마다
+load(); setInterval(load, 5000);
+if (window.FLOW_ON) setInterval(drawCurrent, 1000);     // 트럭 그림은 장부를 따라 1초마다
+window.addEventListener("resize", () => { if (typeof P !== "undefined" && P) { drawFlow(); drawTimeline(); } });
+</script>
+{% endblock %}
