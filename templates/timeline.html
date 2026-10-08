@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="row"><h2 style="font-size:20px;margin:0">설비 상태 타임라인 <span class="small muted" id="winLabel"></span></h2><div class="seg-btns" id="ranges"></div></div>
+
+<section class="panel" style="position:relative" aria-label="타임라인">
+  <div class="row small muted" style="justify-content:flex-start;gap:18px">
+    <span><i class="lg" style="background:#2A6B5C"></i>가동</span><span><i class="lg" style="background:var(--warn)"></i>연동 정지</span>
+    <span><i class="lg" style="background:var(--bad)"></i>안전·고장 정지</span><span><i class="lg lg-future"></i>아직 오지 않은 시간</span>
+    <span>정지 구간을 누르면 원인과 복구 방법이 보여요</span>
+  </div>
+  <div class="tl" id="tl"></div>
+  <div class="tl-pop" id="pop" hidden></div>
+</section>
+
+<div class="grid g3">
+  <div class="kpi"><div class="small muted">가장 오래 멈춘 설비</div><div style="font-size:20px;font-weight:700" id="sLong">-</div><div class="small muted" id="sLongSub"></div></div>
+  <div class="kpi"><div class="small muted">가장 자주 멈춘 설비 (안전·고장 정지)</div><div style="font-size:20px;font-weight:700" id="sFreq">-</div><div class="small muted" id="sFreqSub"></div></div>
+  <div class="kpi"><div class="small muted">평균 복구 시간 (MTTR)</div><div class="v mono" id="sMttr">-</div><div class="small muted" id="sMttrSub"></div></div>
+</div>
+
+<script>
+let D = null;
+const SEGC = s => s === "가동" ? "#2A6B5C" : (["안전 정지", "고장 정지"].includes(s) ? "var(--bad)" : "var(--warn)");
+
+function draw(d) {
+  D = d; const w = d.window, span = w.end - w.start, X = t => ((t - w.start) / span * 100);
+  winLabel.textContent = w.label;
+  const ticks = []; for (let t = Math.ceil(w.start / 3600) * 3600; t <= w.end; t += 3600)
+    if (Math.abs(X(t) - X(w.cur)) > 4) ticks.push(t);          // '지금' 표시와 겹치는 눈금은 숨김
+  let html = `<div></div><div class="tl-axis">${ticks.map(t => `<span style="left:${X(t)}%">${hm(t)}</span>`).join("")}
+    <span class="now" style="left:${X(w.cur)}%">지금</span></div><div class="tl-head"><span>가동률</span><span>정지</span><span>정지 시간</span></div>`;
+  d.rows.forEach((r, ri) => {
+    const segs = r.segments.map((s, si) => `<button class="tl-seg${s.status === "가동" ? " run" : ""}" data-r="${ri}" data-s="${si}"
+        style="left:${X(s.start)}%;width:${Math.max(s.status === "가동" ? 0 : 0.5, X(s.end) - X(s.start))}%;background:${SEGC(s.status)}"
+        aria-label="${esc(r.name)} ${esc(s.status)} ${hm(s.start)}부터 ${mins(s.end - s.start)}"></button>`).join("");
+    const bad = r.stops ? (r.bad_stops ? "c-bad" : "c-warn") : "";
+    html += `<div class="tl-name">${esc(r.name)}</div>
+      <div class="tl-bar"><div class="tl-future" style="left:${X(w.cur)}%"></div>${segs}<div class="tl-now" style="left:${X(w.cur)}%"></div></div>
+      <div class="tl-stat mono"><span>${pctTxt(r.run_ratio)}</span><span class="${bad}">${r.stops}회</span><span>${mins(r.downtime)}</span></div>`;
+  });
+  tl.innerHTML = html;
+  sLong.textContent = d.longest ? d.longest.name : "없음";
+  sLongSub.textContent = d.longest ? `총 ${mins(d.longest.downtime)} 정지` : "이 기간에 멈춘 설비가 없어요";
+  sFreq.textContent = d.frequent ? `${d.frequent.name} · ${d.frequent.stops}회` : "없음";
+  sFreqSub.textContent = d.frequent ? "같은 원인이 반복되면 사건 카드에서 확인하세요" : "";
+  sMttr.textContent = d.mttr == null ? "-" : mins(d.mttr);
+  sMttrSub.textContent = d.mttr == null ? "복구가 끝난 안전·고장 정지가 없어요" : `복구가 끝난 정지 ${d.mttr_n}건 평균`;
+}
+
+tl.addEventListener("click", e => {
+  const b = e.target.closest(".tl-seg"); if (!b || b.classList.contains("run")) { pop.hidden = true; return; }
+  const r = D.rows[b.dataset.r], s = r.segments[b.dataset.s], inc = s.incident;
+  const bad = ["안전 정지", "고장 정지"].includes(s.status);
+  pop.style.borderColor = bad ? "var(--bad)" : "var(--warn)";
+  pop.innerHTML = `<div style="font-weight:700" class="${bad ? "c-bad" : "c-warn"}">${bad ? "■" : "▲"} ${esc(r.name)} · ${esc(s.status)}</div>
+    <div class="mono small">${hm(s.start)} ~ ${s.open ? "진행 중" : hm(s.end)} · ${mins(s.end - s.start)}</div>
+    ${s.reason ? `<div class="small">사유: ${esc(s.reason)}</div>` : ""}
+    ${inc ? `<div class="small">사건 #${String(inc.no).padStart(4, "0")}: ${inc.steps.map(esc).join(" → ")}</div>
+             <div class="small c-ok">${inc.recovery ? "복구: " + esc(inc.recovery) : "아직 복구 전"}</div>` : ""}
+    <a class="btn" href="/" style="align-self:flex-start;min-height:36px">관제 대시보드에서 보기</a>`;
+  const box = b.closest("section").getBoundingClientRect(), rb = b.getBoundingClientRect();
+  pop.style.left = Math.min(rb.left - box.left, box.width - 340) + "px";
+  pop.style.top = (rb.bottom - box.top + 8) + "px";
+  pop.hidden = false;
+});
+
+const load = () => fetch("/api/timeline?range=" + currentRange()).then(r => r.json()).then(draw).catch(() => {});
+rangeButtons(ranges, () => { pop.hidden = true; load(); });
+load(); setInterval(load, 10000);
+poll(() => {});
+</script>
+{% endblock %}
