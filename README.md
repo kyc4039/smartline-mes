@@ -120,6 +120,19 @@ uv sync
 ```
 (ZIP으로 받았다면 다시 내려받아 덮어쓰되, `config_local.py`와 `model_files/`는 옮겨 두세요.)
 
+### 8. 시연용 기록 넣기 (발표 전 선택)
+
+처음 실행하면 기록이 없어 OEE 7일 추이 · 정비 지표(MTTR · MTBF) · 요일 × 시간 지도가 비어 있습니다. 발표 전에 한 번 실행하면 최근 평일 7일치 기록이 채워집니다.
+
+```bash
+# 서버를 끈 상태(Ctrl + C)에서
+uv run python tools/seed_demo_data.py
+uv run app.py
+```
+- 기존 `smartline.db`는 `smartline.db.bak_날짜시각`으로 보관되고 새 DB가 만들어집니다. 되돌리려면 서버를 끄고 `smartline.db`를 지운 뒤 백업 파일 이름을 `smartline.db`로 바꾸세요.
+- 오늘 기록은 교대 시작부터 실행 3분 전까지만 들어가고, 그 뒤는 카메라 · 시뮬레이터가 이어서 기록합니다. 발표 당일에 실행하는 것이 가장 자연스럽습니다.
+- `--days 10` (평일 10일), `--no-today` (오늘은 비워 두기)
+
 ### 문제가 생기면
 
 | 증상 | 해결 |
