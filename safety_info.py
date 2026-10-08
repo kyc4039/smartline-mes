@@ -159,8 +159,8 @@ def info(now=None):
     stops = _stops(m, now)
     y_stops = _stops(m - 86400, m)
     evs = db.events_between(m, now + 1, "safety")
-    warns = [e for e in evs if e["event"].startswith("경고구역 접근")]
-    hits_ev = [e for e in evs if e["event"].startswith("위험구역 침입")]
+    warns = [e for e in evs if e["event"].startswith("경고구역") and e["event"].endswith("접근")]   # "경고구역 손 접근"
+    hits_ev = [e for e in evs if e["event"].startswith("위험구역") and "침입" in e["event"]]   # "위험구역 손 침입 → 안전 정지"
     auto_n = sum(1 for e in evs if "자동 재가동" in e["event"])
     manual_n = sum(1 for e in evs if e["event"].startswith("수동 재가동"))
     real = [s for s in stops if _kind(s["reason"]) != "lock"]            # 정비 잠금은 '사고성 정지'에서 뺌
