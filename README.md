@@ -12,36 +12,125 @@ AI가 작업자를 지키고, 제품을 검사하고, 고장 정비를 배정하
 
 모델 학습 기록은 [smartline-models](https://github.com/kyc4039/smartline-models) 저장소에 있습니다.
 
-## 실행
+## 처음 실행하기 (코드를 몰라도 따라 할 수 있게)
 
-[uv](https://docs.astral.sh/uv/getting-started/installation/)만 설치하면 됩니다 (파이썬도 uv가 받습니다).
+> 처음 한 번만 1~5단계를 하면 되고, 다음부터는 **6단계(실행)**만 하면 됩니다.
+> 명령어는 한 줄씩 복사해서 붙여넣고 Enter를 누르세요.
 
-```bash
-git clone https://github.com/kyc4039/smartline-mes.git
-cd smartline-mes
-uv sync                     # 처음 한 번: .venv 생성 (몇 분 · 2~3GB)
-cp config_local.example.py config_local.py    # Windows: copy config_local.example.py config_local.py
-uv run app.py               # → http://localhost:5000
+### 0. 터미널 열기
+
+| 윈도우 | 맥 |
+|---|---|
+| 시작 메뉴에서 **PowerShell** 검색 → 실행 | Spotlight(⌘ + Space)에서 **터미널** 검색 → 실행 |
+
+### 1. uv 설치 (파이썬 · 라이브러리 관리 도구)
+
+파이썬을 따로 설치할 필요 없습니다. uv가 알아서 받습니다.
+
+**윈도우 (PowerShell)**
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
-- 카메라나 모델 파일이 없어도 **더미 모드**로 모든 화면 · 디지털 트윈 · 시연 모드가 동작합니다.
-- 맥은 AirPlay가 5000번 포트를 쓰는 경우가 많아 `config_local.py`에 `PORT = 5001`을 넣으세요.
-- RealSense 카메라를 쓰면 `uv sync --extra realsense`.
+**맥 (터미널)**
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+설치가 끝나면 **터미널 창을 닫고 새로 연 다음** 아래를 입력해 버전이 나오면 성공입니다.
+```bash
+uv --version
+```
+
+### 2. 코드 내려받기
+
+**방법 A — git이 있으면** (`git --version`이 나오면 있는 것)
+```bash
+cd ~/Desktop
+git clone https://github.com/kyc4039/smartline-mes.git
+cd smartline-mes
+```
+> 윈도우에 git이 없으면 https://git-scm.com/download/win 에서 설치하거나 방법 B를 쓰세요.
+
+**방법 B — git 없이**
+1. 이 페이지 위쪽 초록색 **Code** 버튼 → **Download ZIP**
+2. 바탕화면에 압축을 풀고 폴더 이름을 `smartline-mes`로 바꾸기
+3. 터미널에서 그 폴더로 이동
+```bash
+cd ~/Desktop/smartline-mes
+```
+
+### 3. 라이브러리 설치 (처음 한 번 · 5~10분)
+
+```bash
+uv sync
+```
+torch · tensorflow 등을 받느라 시간이 걸립니다(약 2~3GB). 마지막에 오류 없이 끝나면 성공입니다.
+
+### 4. 내 PC 설정 파일 만들기
+
+**윈도우**
+```powershell
+copy config_local.example.py config_local.py
+```
+**맥**
+```bash
+cp config_local.example.py config_local.py
+```
+메모장(맥은 텍스트 편집기)으로 `config_local.py`를 열어 필요한 것만 고칩니다.
+- `ADMIN_PIN`: 팀에서 정한 관리자 PIN (팀장에게 받기)
+- `CAMERAS`: 카메라 번호 — 모르면 그대로 두고 실행 후 **시스템 점검 > 카메라 번호 찾기**로 확인
+- 맥이면 `# PORT = 5001` 앞의 `# `를 지워서 켜기 (맥은 5000번을 AirPlay가 씀)
+
+### 5. 모델 파일 넣기 (선택)
+
+모델이 없어도 화면 · 디지털 트윈 · 시연은 모두 동작합니다(더미 모드). 실제 AI 판정을 하려면 팀 드라이브에서 받아 넣으세요.
+
+| 받을 파일 | 넣을 위치 |
+|---|---|
+| 안전게이트 `best.pt` | `model_files/gate/best.pt` |
+| 품질검사 `best.pt` | `model_files/quality/best.pt` |
+| 프레스 안전 `best.pt` | `model_files/safety/best.pt` |
+| `smartline_maintenance_model.zip` | `model_files/` 안에서 압축 풀기 → `model_files/maintenance/VERIFIED.txt`가 보이면 정상 |
+
+### 6. 실행
+
+```bash
+uv run app.py
+```
+`Running on http://127.0.0.1:5000` 같은 글자가 나오면 브라우저(크롬 권장)에서 **http://localhost:5000** 접속 (맥에서 5001로 바꿨으면 5001).
+
+- 첫 화면은 **안전 게이트**입니다. 카메라가 없으면 아래 **관리자 우회 입장**에 PIN을 넣고 들어가세요 (설정 안 했으면 `0000`).
+- 끄기: 터미널에서 **Ctrl + C**
+- 다음부터는 터미널에서 폴더로 이동(`cd ~/Desktop/smartline-mes`) 후 `uv run app.py`만 하면 됩니다.
+
+### 7. 최신 버전 받기
+
+```bash
+git pull
+uv sync
+```
+(ZIP으로 받았다면 다시 내려받아 덮어쓰되, `config_local.py`와 `model_files/`는 옮겨 두세요.)
+
+### 문제가 생기면
+
+| 증상 | 해결 |
+|---|---|
+| `uv`를 찾을 수 없음 / 'uv' is not recognized | 터미널을 **닫고 새로 열기**. 그래도 안 되면 1단계 다시 |
+| PowerShell에서 "스크립트를 실행할 수 없습니다" | 1단계 명령을 그대로(앞의 `powershell -ExecutionPolicy ByPass` 포함) 다시 실행 |
+| `uv sync`가 오래 걸림 | 정상입니다 (처음 5~10분). 인터넷 연결 확인 |
+| `Address already in use` / 포트 사용 중 | `config_local.py`에 `PORT = 5001` 넣고 다시 실행 |
+| 화면에 `NO CAMERA` | 카메라 번호가 다름 → 시스템 점검 > 카메라 번호 찾기 → `config_local.py`의 `source` 수정 → 다시 실행 |
+| 맥에서 카메라가 안 켜짐 | 시스템 설정 > 개인정보 보호 및 보안 > 카메라 → 터미널 허용 |
+| 정비 AI가 전부 '정기 점검' | 설비보전 모델 없음 → 5단계 확인 (`model_files/maintenance/maintenance/`처럼 폴더가 두 번 생기지 않았는지) |
+| `config_local.py`를 고쳤는데 그대로 | Ctrl + C로 끄고 `uv run app.py` 다시 실행 |
+
+그래도 안 되면 터미널 화면 전체를 캡처해서 팀장에게 보내 주세요.
 
 ## 모델 파일 (저장소에 없음)
 
-가중치는 아직 개선 중이라 저장소에 올리지 않았습니다. 받은 파일을 아래 위치에 넣으면 실제 판정으로 바뀝니다.
-
-```
-model_files/
-├── gate/best.pt          안전게이트
-├── quality/best.pt       품질검사
-├── safety/best.pt        프레스 안전
-└── maintenance/          설비보전 (smartline-models에서 tools/export_maint_model.py로 복사)
-```
-
-설비보전 모델이 `model_files/maintenance`에 없으면 옆 폴더 `../smartline-models/maintenance`에서 불러오고,
-그것도 없으면 더미 분류기로 동작합니다.
+가중치는 아직 개선 중이라 저장소에 올리지 않습니다. 넣는 위치는 위 **5단계**와 [model_files/README.md](model_files/README.md)를 보세요.
+설비보전 모델이 `model_files/maintenance`에 없으면 옆 폴더 `../smartline-models/maintenance`에서 찾고, 그것도 없으면 더미 분류기로 동작합니다.
 
 ## 설정
 
