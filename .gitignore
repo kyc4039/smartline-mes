@@ -13,6 +13,7 @@ config_local.py
 *.db-journal
 *.db-wal
 *.db-shm
+*.db.bak_*
 safety_snaps/*
 !safety_snaps/.gitkeep
 defect_images/
