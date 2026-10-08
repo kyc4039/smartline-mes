@@ -1,0 +1,498 @@
+{% extends "base.html" %}
+{% block head %}
+<style>
+/* 설비 보전 · 정비 지휘 */
+.ub{display:flex;gap:4px;margin-top:3px;flex-wrap:wrap}
+
+.eqs{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.eqc{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px;cursor:pointer;text-align:left;font:inherit;color:var(--text);min-width:0}
+.eqc:hover{border-color:var(--data)}
+.eqc.bad{border-color:var(--bad-bd);background:linear-gradient(180deg,#241315,var(--panel) 60%)}
+.eqc.warn{border-color:var(--warn-bd)}
+.eqc .hd{display:flex;align-items:center;gap:12px;min-width:0}
+.eqc h3{margin:0;font-size:15px}.eqc .st{font-size:12px}
+.eqc .meta{display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px;color:var(--muted)}
+.eqc .meta div{background:var(--panel2);border-radius:7px;padding:6px 8px}.eqc .meta b{display:block;font-family:var(--mono);font-size:15px;color:var(--text)}
+.spark{display:flex;align-items:flex-end;gap:3px;height:26px}.spark i{flex:1;background:#2E3B44;border-radius:2px 2px 0 0;min-height:2px}
+.eqc .ft{font-size:12px;color:var(--muted);min-height:16px}
+
+.mid{display:grid;grid-template-columns:minmax(0,.95fr) minmax(0,1.25fr);gap:16px;align-items:stretch}
+.voice{padding:14px 18px}
+.eqpick{display:flex;gap:6px;flex-wrap:wrap}
+.eqpick button{padding:0 14px;min-height:38px;border-radius:999px;border:1px solid var(--line2);background:transparent;color:var(--text);font:inherit;font-size:13px;cursor:pointer}
+.eqpick button.on{border-color:var(--data);background:#10222D;color:#CFEFFF;font-weight:700}
+.res2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.bigc{border-radius:12px;padding:14px;display:flex;gap:12px;align-items:center;min-width:0}
+.bigc .ic{width:52px;height:52px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;flex:none}
+.bigc .l{font-size:12px;opacity:.85}.bigc .v{font-size:22px;font-weight:700}
+.bigc.bad{background:var(--bad-bg);border:1px solid var(--bad-bd);color:var(--bad-tx)}.bigc.bad .ic{background:var(--bad);color:#fff}.bigc.bad .v{color:#FFE1DF}
+.bigc.warn{background:var(--warn-bg);border:1px solid var(--warn-bd);color:var(--warn-tx)}.bigc.warn .ic{background:var(--warn);color:#2B2210}.bigc.warn .v{color:#FFF1D6}
+.bigc.ok{background:var(--ok-bg);border:1px solid var(--ok-bd);color:var(--ok-tx)}.bigc.ok .ic{background:var(--ok);color:#06231c}
+.bigc.type{background:#10222D;border:1px solid #2E5C75;color:#9FD8F5}.bigc.type .ic{background:#4CC3FF;color:#04202E}.bigc.type .v{color:#CFEFFF}
+.gauge{display:flex;gap:6px}.gauge div{flex:1;border-radius:8px;padding:8px;text-align:center;font-size:12px;background:var(--panel2);border:1px solid var(--line)}
+.gauge div b{display:block;font-family:var(--mono);font-size:16px}
+.gauge .on.bad{background:var(--bad-bg);border-color:var(--bad-bd);color:var(--bad-tx)}.gauge .on.warn{background:var(--warn-bg);border-color:var(--warn-bd);color:var(--warn-tx)}.gauge .on.ok{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--ok-tx)}
+.sim{display:flex;flex-direction:column;gap:6px}
+.sim div{display:flex;gap:10px;align-items:center;font-size:13px;padding:8px 10px;background:var(--panel2);border-radius:8px;border:1px solid var(--line);min-width:0}
+.sim .t{font-family:var(--mono);font-size:11px;color:var(--muted);width:40px;flex:none}
+.sim .x{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sim .p{font-size:11px;color:var(--ok-tx);white-space:nowrap}
+.todo{display:flex;flex-direction:column;gap:6px}
+.todo label{font-size:13px;display:flex;gap:8px;align-items:center;cursor:pointer}
+.todo input{width:16px;height:16px;accent-color:var(--ok)}
+.flags{font-size:12px}
+
+.kan{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.kcol{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.kcol h4{margin:0 0 2px;font-size:13px;display:flex;justify-content:space-between;color:var(--muted)}
+.tk{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--line2);border-radius:9px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.tk.u상{border-left-color:var(--bad)}.tk.u중{border-left-color:var(--warn)}.tk.u하{border-left-color:#4CC3FF}
+.tk.done{opacity:.8}
+.tk .r1{display:flex;gap:6px;align-items:center;font-size:12px;min-width:0}
+.tk .r1 .eqn{margin-left:auto;color:var(--muted);white-space:nowrap}
+.tk .tx{font-size:13px;overflow-wrap:anywhere}
+.tk .sla{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted)}
+.tk .sla .bar{flex:1;height:6px}
+.tk .acts{display:flex;gap:6px;justify-content:flex-end}
+.tk .acts .btn{min-height:34px;padding:0 12px;font-size:13px}
+
+.bot{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:16px}
+.heat{display:grid;grid-template-columns:96px repeat(4,minmax(0,1fr));gap:4px;font-size:12px}
+.heat .h{color:var(--muted);text-align:center;padding:4px 0}.heat .rl{color:var(--muted);display:flex;align-items:center}
+.heat .c{height:38px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:600}
+.cal{display:grid;grid-template-columns:96px repeat(7,minmax(0,1fr));gap:4px;font-size:12px}
+.cal .h{color:var(--muted);text-align:center;padding:4px 0}.cal .h.today{color:#4CC3FF;font-weight:700}
+.cal .rl{color:var(--muted);display:flex;align-items:center}
+.cal .c{min-height:36px;border-radius:6px;background:var(--panel2);display:flex;flex-direction:column;gap:3px;padding:3px}
+.cal .c.today{outline:1px solid #2E5C75}
+.cal .c button{border-radius:5px;font:inherit;font-size:11px;padding:4px 2px;cursor:pointer;border:1px solid;background:none}
+.cal .p{background:#10222D!important;color:#9FD8F5;border-color:#2E5C75!important}
+.cal .d{background:var(--ok-bg)!important;color:var(--ok-tx);border-color:var(--ok-bd)!important}
+.cal .late{background:var(--bad-bg)!important;color:var(--bad-tx);border-color:var(--bad-bd)!important}
+@media (max-width:1200px){.eqs{grid-template-columns:repeat(2,minmax(0,1fr))}.mid,.bot,.kan{grid-template-columns:minmax(0,1fr)}}
+</style>
+{% endblock %}
+{% block body %}
+<div class="pg-head">
+  <h1>설비 보전 · 정비 지휘</h1>
+  <span class="sub">음성 고장 보고 → AI 판정 → 담당 배정 → 조치 → 완료 피드백(AI 학습)</span>
+  <div class="right"><a class="pg-chip" href="/feedback" id="aiChip">AI 판정 정확도 -</a></div>
+</div>
+
+<!-- ① 보전 KPI -->
+<div class="kgrid5">
+  <div class="kc"><div class="ic ic-bad">🔧</div><div style="min-width:0"><div class="l">처리 대기 티켓</div><div class="v" id="kOpen">-</div><div class="ub" id="kOpenBy"></div></div></div>
+  <div class="kc"><div class="ic ic-data">⏱</div><div><div class="l">평균 수리 시간 MTTR</div><div class="v" id="kMttr">-</div><div class="d" id="kMttrD">-</div></div></div>
+  <div class="kc"><div class="ic ic-ok">♻</div><div><div class="l">평균 고장 간격 MTBF</div><div class="v" id="kMtbf">-</div><div class="d" id="kMtbfD">-</div></div></div>
+  <div class="kc"><div class="ic ic-warn">■</div><div><div class="l">오늘 고장 정지</div><div class="v" id="kDown">-</div><div class="d" id="kDownD">-</div></div></div>
+  <div class="kc"><div class="ic ic-mut">✓</div><div><div class="l">처리 기한 준수율</div><div class="v" id="kSla">-</div><div class="d">즉시 30분 · 당일 8시간 · 정기 7일 안에 완료</div></div></div>
+</div>
+
+<!-- ② 설비 건강 (누르면 그 설비로 고장 보고) -->
+<div class="eqs" id="eqs"></div>
+
+<!-- ③ 고장 보고 | ④ AI 판정 결과 -->
+<div class="mid">
+  <section class="panel" aria-label="고장 보고">
+    <div class="row"><h2>고장 보고</h2><span class="small muted">말하면 설비 · 증상을 자동으로 인식</span></div>
+    <div class="voice">
+      <button type="button" class="mic" id="micBtn" aria-label="눌러서 말하기" onclick="toggleVoice()">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8"/></svg>
+      </button>
+      <div style="min-width:0">
+        <div style="font-weight:700;font-size:16px" id="voiceTitle">말로 보고하기</div>
+        <div class="small muted" id="voiceMsg">버튼을 누르고 증상을 말하세요. 말이 끝나면 바로 판정합니다.</div>
+        <div class="wave" id="wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <label for="tx">증상 (말하거나 직접 입력)</label>
+      <textarea id="tx" rows="3" placeholder="예: 프레스 하강할 때 쇠 긁히는 소리가 나요"></textarea>
+      <label class="small" style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="autoJudge" checked> 말이 끝나면 자동으로 AI 판정</label>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div class="small muted">설비 (문장에서 자동 선택)</div>
+      <div class="eqpick" id="eqPick">{% for e in equipment %}<button type="button" data-eq="{{ e }}">{{ e }}</button>{% endfor %}</div>
+      <select id="eq" hidden>{% for e in equipment %}<option>{{ e }}</option>{% endfor %}</select>
+      <div id="eqNote" class="small" style="color:var(--data)"></div>
+    </div>
+    <button class="btn primary" style="align-self:flex-start;min-height:48px;padding:0 26px" onclick="send()">AI 판정</button>
+    <div id="err" class="c-bad small"></div>
+    <div id="confirmBox" class="state t-warn" style="display:none"></div>
+  </section>
+
+  <section class="panel" aria-label="AI 판정 결과">
+    <div class="row"><h2>AI 판정 결과</h2><span class="small muted mono" id="ticketNo"></span></div>
+    <div id="res" class="empty" style="flex:1;display:flex;align-items:center;justify-content:center">고장 내용을 입력하고 AI 판정을 눌러 주세요<br>담당 분야 · 조치 시점 · 비슷한 지난 정비 · 추천 점검 순서를 보여 드려요</div>
+  </section>
+</div>
+
+<!-- ⑤ 정비 티켓 진행판 -->
+<section class="panel" aria-label="정비 티켓 진행판">
+  <div class="row"><h2>정비 티켓 진행판</h2><span class="small muted">왼쪽 띠 색 = 조치 시점 · 막대 = 처리 기한까지 남은 시간 · <span id="openCount"></span></span></div>
+  <div class="kan">
+    <div class="kcol"><h4><span>● 대기</span><span id="cWait">0</span></h4><div id="colWait" style="display:flex;flex-direction:column;gap:8px"></div></div>
+    <div class="kcol"><h4><span>▶ 조치 중</span><span id="cDoing">0</span></h4><div id="colDoing" style="display:flex;flex-direction:column;gap:8px"></div></div>
+    <div class="kcol"><h4><span>✓ 오늘 완료</span><span id="cDone">0</span></h4><div id="colDone" style="display:flex;flex-direction:column;gap:8px"></div></div>
+  </div>
+</section>
+
+<div class="bot">
+  <!-- ⑥ 고장 지도 -->
+  <section class="panel" aria-label="고장 지도">
+    <div class="row"><h2>고장 지도 (설비 × 분야 · 30일)</h2><span class="small muted">진할수록 자주 고장</span></div>
+    <div class="heat" id="heat"></div>
+    <div class="small" id="heatNote" style="color:var(--warn-tx);min-height:18px"></div>
+  </section>
+  <!-- ⑦ 예방 정비 일정 -->
+  <section class="panel" aria-label="예방 정비 일정">
+    <div class="row"><h2>예방 정비 일정 (이번 주)</h2><span class="small muted"><span style="color:#9FD8F5">■</span> 예정 · <span class="c-ok">■</span> 완료 · <span class="c-bad">■</span> 지연 <span id="pmLate"></span></span></div>
+    <div class="cal" id="cal"></div>
+    <div class="row"><span class="small muted">칸을 누르면 완료 체크 (다시 누르면 취소)</span><span class="whoin">작업자 <input id="who" placeholder="이름" maxlength="12" style="width:110px"></span></div>
+  </section>
+</div>
+
+<dialog id="fbDialog" class="fb" aria-labelledby="fbTitle">
+  <form method="dialog" id="fbForm" style="display:flex;flex-direction:column;gap:16px">
+    <div class="row"><h2 id="fbTitle" style="margin:0">정비 완료</h2><span class="small muted mono" id="fbTicket"></span></div>
+    <div class="card" style="padding:12px 14px"><div class="small muted">증상</div><div id="fbText" style="font-size:16px;color:var(--text)"></div></div>
+    <div>
+      <div class="small muted" style="margin-bottom:6px">AI 판정</div>
+      <div id="fbAi" style="font-size:18px;font-weight:700"></div>
+    </div>
+    <label for="fbAct" class="small muted" style="margin-bottom:-10px">한 조치 (다음에 비슷한 고장이 나면 '비슷한 지난 정비'에 보여요)</label>
+    <input id="fbAct" maxlength="200" placeholder="예: 유압 호스 교체">
+    <div style="font-size:17px;font-weight:600">실제로 고쳐 보니, AI 판정이 맞았나요?</div>
+    <div class="row" style="gap:10px;justify-content:flex-start">
+      <button type="button" class="btn primary" id="fbYes" style="min-height:52px;padding:0 22px">● 맞았어요</button>
+      <button type="button" class="btn" id="fbNo" style="min-height:52px;padding:0 22px">고쳐야 해요</button>
+    </div>
+    <div id="fbFix" style="display:none;flex-direction:column;gap:14px">
+      <fieldset class="chips"><legend>실제 담당 분야</legend><div id="fbTypes"></div></fieldset>
+      <fieldset class="chips"><legend>실제 조치 시점</legend><div id="fbUrgs"></div></fieldset>
+      <div class="small muted">기준: 즉시 = 안전 위험이 있거나 설비가 멈춤 · 당일 = 품질 영향, 가동 저하, 악화 중 · 정기 = 그 외</div>
+      <label for="fbNote" class="small muted">메모 (선택)</label>
+      <input id="fbNote" maxlength="200" placeholder="예: 실제 원인은 센서 배선 단선">
+      <button type="button" class="btn primary" id="fbSave" style="align-self:flex-start">고쳐서 완료</button>
+    </div>
+    <div class="row" style="border-top:1px solid var(--line);padding-top:12px">
+      <button type="button" class="btn" id="fbSkip" style="min-height:36px">피드백 없이 완료</button>
+      <button type="button" class="btn" id="fbCancel" style="min-height:36px">취소</button>
+    </div>
+  </form>
+</dialog>
+<div id="mdlRoot"></div>
+<div id="toast" class="toast" role="status" hidden></div>
+
+<script>
+const U = {"상": "즉시 조치", "중": "당일 조치", "하": "정기 점검"}, US = {"상": "즉시", "중": "당일", "하": "정기"};
+const UT = {"상": "bad", "중": "warn", "하": "ok"}, USH = {"상": "■", "중": "▲", "하": "●"}, UTG = {"상": "r", "중": "y", "하": "b"};
+const TEAMS = [["기계", "기계 정비"], ["전기", "전기·제어"], ["유압공압", "유공압"], ["센서", "센서·계측"]];
+const TN = Object.fromEntries(TEAMS);
+const TICON = {"기계": "⚙", "전기": "⚡", "유압공압": "💧", "센서": "◎"};
+const LOCKABLE = ["프레스 #1"];
+const whoEl = document.getElementById("who");
+try { whoEl.value = localStorage.getItem("mt_who") || ""; } catch (e) {}
+whoEl.onchange = () => { try { localStorage.setItem("mt_who", whoEl.value.trim()); } catch (e) {} };
+const who = () => whoEl.value.trim();
+const dur = s => s == null ? "-" : s < 60 ? `${Math.round(s)}초` : s < 3600 ? `${Math.round(s / 60)}분` : s < 86400 ? `${Math.floor(s / 3600)}시간 ${Math.round(s % 3600 / 60)}분` : `${Math.round(s / 86400)}일`;
+const md = ts => { const d = new Date(ts * 1000); return `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`; };
+
+// ---------- 설비 선택 칩 (숨은 select와 같이 움직임: 기존 코드 호환) ----------
+function pickEq(name) {
+  eq.value = name;
+  eqPick.querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.eq === eq.value));
+}
+eqPick.onclick = e => { const b = e.target.closest("[data-eq]"); if (b) { pickEq(b.dataset.eq); eqNote.textContent = ""; } };
+pickEq(eq.value);
+
+// ---------- 음성 고장 보고 (브라우저 내장 한국어 음성 인식) ----------
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null, listening = false, heard = "";
+function setListening(on) {
+  listening = on;
+  micBtn.classList.toggle("on", on);
+  micBtn.setAttribute("aria-label", on ? "말하기 멈추기" : "눌러서 말하기");
+  wave.classList.toggle("on", on);
+  voiceTitle.textContent = on ? "듣고 있어요..." : "말로 보고하기";
+}
+function toggleVoice() {
+  if (!SR) { voiceMsg.textContent = "이 브라우저는 음성 인식을 지원하지 않아요. 크롬에서 열거나 직접 입력해 주세요."; return; }
+  if (listening) { rec.stop(); return; }
+  rec = new SR();
+  rec.lang = "ko-KR"; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
+  heard = "";
+  rec.onresult = e => {
+    let interim = "", conf = null;
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const r = e.results[i];
+      if (r.isFinal) { heard += r[0].transcript; conf = r[0].confidence; } else interim += r[0].transcript;
+    }
+    tx.value = (heard + interim).trim();
+    tx.dispatchEvent(new Event("input"));                       // 설비 자동 선택도 함께
+    if (conf !== null) voiceMsg.textContent = `인식 완료 · 신뢰도 ${Math.round(conf * 100)}% · 틀린 글자는 바로 고칠 수 있어요`;
+  };
+  rec.onerror = e => {
+    voiceMsg.textContent = {"not-allowed": "마이크 사용이 허용되지 않았어요. 주소창 왼쪽 자물쇠에서 마이크를 허용해 주세요.",
+      "no-speech": "말소리가 들리지 않았어요. 다시 눌러 주세요.", "network": "음성 인식에 인터넷 연결이 필요해요. 직접 입력해 주세요."}[e.error]
+      || "음성 인식 오류: " + e.error;
+  };
+  rec.onend = () => {
+    setListening(false);
+    if (heard.trim() && autoJudge.checked) { voiceMsg.textContent += " → AI 판정 중"; send(); }
+  };
+  voiceMsg.textContent = "말이 끝나면 자동으로 멈춰요. 다시 누르면 바로 멈춥니다.";
+  rec.start(); setListening(true);
+}
+if (!SR) voiceMsg.textContent = "이 브라우저는 음성 인식을 지원하지 않아요 (크롬 권장). 직접 입력해 주세요.";
+
+// 디지털 트윈에서 "정비 요청"으로 왔으면 그 설비를 미리 선택
+const preEq = new URLSearchParams(location.search).get("equipment");
+if (preEq) { pickEq(preEq); eqNote.textContent = `디지털 트윈에서 '${preEq}'를 선택해 왔어요`; tx.focus(); }
+// 품질 관리 '불량품 처리 → 정비 요청'으로 왔으면 내용도 미리 채움 (확인 후 직접 보내기)
+const preTx = new URLSearchParams(location.search).get("text");
+if (preTx) { tx.value = preTx; eqNote.textContent = `품질 관리에서 '${preEq || ""}' 정비 요청 내용을 채워 왔어요. 확인 후 보내 주세요`; }
+
+// 입력하는 동안 문장에서 설비를 찾아 자동 선택
+let detectTimer;
+tx.addEventListener("input", () => {
+  clearTimeout(detectTimer);
+  detectTimer = setTimeout(() => fetch("/api/detect_equipment?text=" + encodeURIComponent(tx.value))
+    .then(r => r.json()).then(d => {
+      if (d.detected.length === 1) { pickEq(d.detected[0]); eqNote.textContent = `문장에서 '${d.detected[0]}'를 찾아 자동 선택했어요`; }
+      else if (d.detected.length > 1) eqNote.textContent = "여러 설비가 나와요: " + d.detected.join(", ");
+      else eqNote.textContent = "";
+    }), 400);
+});
+
+// ---------- ④ AI 판정 결과 ----------
+function resultHtml(r, pending) {
+  const probs = r.urgency_probs || {};
+  const gauge = ["상", "중", "하"].map(u => {
+    const v = probs[US[u]] || 0, on = r.urgency === u;
+    const has = Object.keys(probs).length > 0;          // 더미 분류기는 확률이 없음 → 선택된 칸만 표시
+    return `<div class="${on ? "on " + UT[u] : ""}">${US[u]}<b>${has ? Math.round(v * 100) + "%" : on ? "✓" : "-"}</b></div>`; }).join("");
+  const tconf = (r.type_probs || {})[r.type] ?? (r.type_probs || {})[r.type_name];
+  const sub = {"상": "30분 안에 · 설비 자동 정지", "중": "오늘 안에 (8시간)", "하": "정기 점검 때 (7일)"}[r.urgency];
+  const sims = (r.similar || []).map(s => `<div title="${esc(s.text)}"><span class="t">${md(s.ts)}</span>
+      <span class="x">${esc(s.text)}${s.note ? ` <span class="c-ok">→ ${esc(s.note)}</span>` : ""}${s.same ? "" : ` <span class="muted">(${esc(s.equipment)})</span>`}</span>
+      <span class="p">${s.min != null ? s.min + "분" : ""}</span></div>`).join("") || '<div class="muted">아직 같은 분야 정비 기록이 없어요</div>';
+  const steps = (r.steps || []).map((s, i) => `<label><input type="checkbox">${i + 1}. ${esc(s)}</label>`).join("");
+  const flags = [r.collab ? "협업: " + r.collab : null,
+                 r.danger_rule_applied ? "위험 단어 감지 → 즉시 조치" : null,
+                 r.need_review ? "관리자 확인 필요 (" + (r.review_reasons || []).join(", ") + ")" : null].filter(Boolean);
+  return `<div class="res2">
+      <div class="bigc type"><div class="ic">${TICON[r.type] || "⚙"}</div><div><div class="l">담당 분야</div><div class="v">${esc(TN[r.type] || r.type_name)}</div>
+        <div class="small">${tconf != null ? `신뢰도 ${Math.round(tconf * 100)}%` : esc(r.type)}</div></div></div>
+      <div class="bigc ${UT[r.urgency]}"><div class="ic">${USH[r.urgency]}</div><div><div class="l">조치 시점</div><div class="v">${U[r.urgency]}</div><div class="small">${sub}</div></div></div></div>
+    <div class="gauge">${gauge}</div>
+    ${flags.length ? `<div class="flags c-warn">▲ ${esc(flags.join(" · "))}</div>` : ""}
+    <div class="res2">
+      <div><div class="small muted" style="margin-bottom:6px">비슷한 지난 정비 (같은 설비 · 같은 분야)</div><div class="sim">${sims}</div></div>
+      <div><div class="small muted" style="margin-bottom:6px">추천 점검 순서</div><div class="todo">${steps}</div></div></div>
+    ${pending ? '<div class="small c-warn">설비 확인 후 접수됩니다.</div>' : ""}`;
+}
+
+function send(confirmed = false, chosen = null) {
+  err.textContent = ""; confirmBox.style.display = "none";
+  if (!tx.value.trim()) { err.textContent = "고장 내용을 입력하세요."; return; }
+  if (chosen) pickEq(chosen);
+  res.className = ""; res.style.cssText = ""; res.innerHTML = '<div class="empty">판정 중...</div>';
+  fetch("/api/classify", {method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({text: tx.value, equipment: eq.value, confirmed})}).then(r => r.json()).then(r => {
+    if (r.error) { err.textContent = r.error; res.innerHTML = ""; return; }
+    res.innerHTML = resultHtml(r, !!r.needs_confirm);
+    res.style.cssText = "display:flex;flex-direction:column;gap:12px";
+    if (r.needs_confirm) {                      // 설비 확인 단계: 아직 티켓을 만들지 않음
+      ticketNo.textContent = "접수 대기";
+      confirmBox.innerHTML = `<div style="font-weight:600">${esc(r.reason)}</div><div class="row" style="justify-content:flex-start;flex-wrap:wrap">` +
+        r.options.map(o => `<button class="btn" onclick='send(true, ${JSON.stringify(o)})'>${esc(o)}로 접수</button>`).join("") + "</div>";
+      confirmBox.style.display = "flex";
+      return;
+    }
+    ticketNo.textContent = `${r.equipment} · 티켓 #${r.ticket_id}`;
+    loadInfo();
+  });
+}
+
+// ---------- 3초마다: KPI · 설비 건강 · 진행판 · 고장 지도 · 예방 정비 ----------
+let INFO = null, tickets = [], lastKey = "";
+function loadInfo() { fetch("/api/maint/info").then(r => r.json()).then(d => { INFO = d; drawInfo(d); }).catch(() => {}); }
+function drawInfo(d) {
+  const k = d.kpi;
+  aiChip.innerHTML = k.ai.acc != null ? `AI 판정 정확도 <b class="mono">${Math.round(k.ai.acc * 100)}%</b> · 피드백 ${k.ai.n}건 →` : "AI 판정 정확도 · 피드백 모으는 중 →";
+  kOpen.innerHTML = `${k.open}<small>건</small>`;
+  kOpenBy.innerHTML = ["상", "중", "하"].map(u => `<span class="tg ${UTG[u]}">${US[u]} ${k.open_by[u]}</span>`).join("") + (k.overdue ? `<span class="tg r">기한 초과 ${k.overdue}</span>` : "");
+  kMttr.innerHTML = k.mttr != null ? `${k.mttr < 10 ? k.mttr.toFixed(1) : Math.round(k.mttr)}<small>분</small>` : "-";
+  kMttrD.textContent = k.mttr == null ? "최근 7일 완료 없음" : k.mttr_prev == null ? `최근 7일 ${k.mttr_n}건` :
+    `지난주 ${Math.round(k.mttr_prev)}분 · ${k.mttr <= k.mttr_prev ? "▼" : "▲"}${Math.abs(Math.round(k.mttr - k.mttr_prev))}분`;
+  kMtbf.innerHTML = k.mtbf != null ? `${k.mtbf}<small>시간</small>` : "-";
+  kMtbfD.textContent = k.mtbf != null ? `7일 고장 ${k.fails7}건 · 길수록 좋음` : "최근 7일 고장 없음";
+  kDown.textContent = k.down_today ? (k.down_today < 3600 ? `${Math.floor(k.down_today / 60)}:${String(k.down_today % 60).padStart(2, "0")}` : dur(k.down_today)) : "0:00";
+  kDownD.textContent = `생산 손실 ≈ ${k.loss_today}개`;
+  kSla.innerHTML = k.sla != null ? `${Math.round(k.sla * 100)}<small>%</small>` : "-";
+
+  // ② 설비 건강
+  eqs.innerHTML = d.health.map(h => {
+    const tn = h.status === "고장 정지" || h.score < 50 ? "bad" : h.score < 75 || h.open ? "warn" : "";
+    const col = tn === "bad" ? "#F0605D" : tn === "warn" ? "#F5B544" : "#3CC6A8";
+    const txc = tn === "bad" ? "#FFB3B0" : tn === "warn" ? "#FFD58A" : "#7FE3C8";
+    const st = h.status !== "가동" ? `<span class="c-${tone(h.status)}">${shape(h.status)} ${esc(h.status)}${h.open_ids.length ? " · #" + h.open_ids[0] : ""}</span>`
+      : h.open ? `<span class="c-warn">▲ 처리 대기 ${h.open}건</span>` : `<span class="c-ok">● 가동</span>`;
+    const mx = Math.max(2, ...h.daily);
+    const bars = h.daily.map((v, i) => `<i style="height:${v / mx * 100}%;${v ? `background:${i === 6 ? col : "#4A5A65"}` : ""}"></i>`).join("");
+    const ft = h.repeat ? `<span style="color:var(--bad-tx)">▲ ${esc(h.repeat.type)} 고장 ${h.repeat.n}회 반복 → 근본 원인 점검</span>`
+      : h.pm_late ? `<span class="c-bad">정기 점검 지연 ${h.pm_late}건</span>`
+      : h.pm_days != null ? `정기 점검 ${h.pm_days === 0 ? "오늘" : "D-" + h.pm_days} · ${esc(h.pm_task)}` : "정기 점검 계획 없음";
+    return `<button class="eqc ${tn}" data-eq="${esc(h.name)}" title="눌러서 이 설비 고장 보고">
+      <div class="hd"><svg width="58" height="58" viewBox="0 0 58 58" aria-hidden="true"><circle cx="29" cy="29" r="24" fill="none" stroke="#26323A" stroke-width="7"/>
+        <circle cx="29" cy="29" r="24" fill="none" stroke="${col}" stroke-width="7" stroke-dasharray="150.8" stroke-dashoffset="${(150.8 * (1 - h.score / 100)).toFixed(1)}" stroke-linecap="round" transform="rotate(-90 29 29)"/>
+        <text x="29" y="34" text-anchor="middle" fill="${txc}" font-family="IBM Plex Mono" font-size="16" font-weight="600">${h.score}</text></svg>
+        <div style="min-width:0"><h3>${esc(h.name)}</h3><div class="st">${st}</div></div></div>
+      <div class="meta"><div>7일 고장<b class="${h.fails7 >= 3 ? "c-bad" : ""}">${h.fails7}회</b></div><div>고장 정지<b>${dur(h.down7)}</b></div></div>
+      <div><div class="small muted" style="margin-bottom:3px">일별 고장 (7일)</div><div class="spark">${bars}</div></div>
+      <div class="ft">${ft}</div></button>`;
+  }).join("");
+
+  drawBoard(d.board);
+  drawHeat(d.heat);
+  drawPm(d.pm);
+}
+eqs.onclick = e => {
+  const b = e.target.closest("[data-eq]"); if (!b) return;
+  pickEq(b.dataset.eq); eqNote.textContent = `'${b.dataset.eq}' 고장 보고`; tx.focus();
+  tx.scrollIntoView({behavior: "smooth", block: "center"});
+};
+
+// ---------- ⑤ 진행판 ----------
+function slaBar(t) {
+  if (t.status === "완료") return "";
+  const left = t.left, frac = Math.max(0, Math.min(1, left / t.sla));
+  const col = left < 0 ? "var(--bad)" : UT[t.urgency] === "ok" ? "#4CC3FF" : `var(--${UT[t.urgency]})`;
+  const txt = left < 0 ? `<span class="c-bad">⏱ 기한 ${dur(-left)} 초과</span>` : `<span class="${left < t.sla * 0.3 ? "c-bad" : ""}">⏱ ${dur(left)} 남음</span>`;
+  return `<div class="sla">${txt}<div class="bar"><i style="width:${left < 0 ? 100 : frac * 100}%;background:${col}"></i></div></div>`;
+}
+function tkHtml(t) {
+  const head = `<div class="r1"><span class="mono muted">#${t.id}</span><span class="tg ${UTG[t.urgency]}">${US[t.urgency]}</span><span class="tg m">${esc(t.type)}</span><span class="eqn">${esc(t.equipment)}</span></div>
+    <div class="tx">${esc(t.text)}</div>`;
+  if (t.status === "완료") {
+    const v = t.verdict ? (t.verdict === "맞음" ? `<span class="c-ok">AI 판정 맞음 👍</span>` : `<span class="c-warn">AI 판정 ${esc(t.verdict)}</span>`) : `<span class="muted">피드백 없음</span>`;
+    return `<div class="tk done u${t.urgency}">${head}${t.note ? `<div class="small c-ok">→ ${esc(t.note)}</div>` : ""}
+      <div class="sla"><span class="${t.in_sla ? "c-ok" : "c-warn"}">✓ ${dur(t.took)}${t.in_sla ? "" : " · 기한 초과"}</span>${t.assignee ? `· 👷 ${esc(t.assignee)}` : ""} · ${v}</div></div>`;
+  }
+  const doing = t.status === "조치 중";
+  const info = doing ? `<div class="sla">👷 ${esc(t.assignee || "정비원")} · ${dur(Date.now() / 1000 - t.started)}째</div>` : "";
+  const acts = doing ? `<button class="btn ${t.urgency === "상" ? "danger" : "primary"}" onclick="done(${t.id})">정비 완료</button>`
+    : `<button class="btn" onclick="startT(${t.id})">▶ 정비 시작</button><button class="btn" onclick="done(${t.id})">바로 완료</button>`;
+  return `<div class="tk u${t.urgency}">${head}${slaBar(t)}${info}<div class="acts">${acts}</div></div>`;
+}
+function drawBoard(b) {
+  tickets = [...b.wait, ...b.doing, ...b.done];
+  cWait.textContent = b.wait.length; cDoing.textContent = b.doing.length; cDone.textContent = b.done.length;
+  openCount.textContent = `미완료 ${b.wait.length + b.doing.length}건`;
+  const key = JSON.stringify([b.wait.map(t => [t.id, Math.round(t.left / 60)]), b.doing.map(t => [t.id, t.assignee]), b.done.map(t => t.id)]);
+  if (key === lastKey) return;                     // 바뀐 게 없으면 다시 그리지 않음 (버튼 클릭이 끊기지 않게)
+  lastKey = key;
+  colWait.innerHTML = b.wait.map(tkHtml).join("") || '<div class="empty">대기 중인 요청 없음</div>';
+  colDoing.innerHTML = b.doing.map(tkHtml).join("") || '<div class="empty">조치 중인 정비 없음</div>';
+  colDone.innerHTML = b.done.map(tkHtml).join("") || '<div class="empty">오늘 완료한 정비 없음</div>';
+}
+
+// ---------- ⑥ 고장 지도 ----------
+function drawHeat(h) {
+  const mx = Math.max(1, h.max);
+  heat.innerHTML = `<div></div>` + h.types.map(t => `<div class="h">${esc(t)}</div>`).join("") + h.rows.map(r =>
+    `<div class="rl">${esc(r.equipment)}</div>` + r.cells.map((v, i) => {
+      if (!v) return `<div class="c" style="background:#1B242A;color:#56646d">0</div>`;
+      const a = v / mx;
+      const bg = a > 0.75 ? "#C93835" : `rgba(240,96,93,${(0.12 + a * 0.5).toFixed(2)})`;
+      return `<div class="c" style="background:${bg};color:${a > 0.75 ? "#fff" : "#FFD9D7"}" title="${esc(r.equipment)} · ${h.types[i]} ${v}건">${v}</div>`;
+    }).join("")).join("");
+  heatNote.textContent = h.top && h.top.n >= 2 ? `▲ ${h.top.equipment} ${h.top.type} ${h.top.n}건 = 전체의 ${Math.round(h.top.share * 100)}% → 예방 정비 주기 단축 검토` : h.total ? "" : "최근 30일 정비 기록 없음";
+}
+
+// ---------- ⑦ 예방 정비 ----------
+function drawPm(p) {
+  pmLate.innerHTML = p.late ? ` · <b class="c-bad">지연 ${p.late}건</b>` : "";
+  cal.innerHTML = `<div></div>` + p.days.map(d => `<div class="h ${d.today ? "today" : ""}">${d.dow} ${d.day}${d.today ? " (오늘)" : ""}</div>`).join("") +
+    p.rows.map(r => `<div class="rl">${esc(r.equipment)}</div>` + r.cells.map((items, i) =>
+      `<div class="c ${p.days[i].today ? "today" : ""}">` + items.map(it =>
+        `<button class="${it.st === "done" ? "d" : it.st === "late" ? "late" : "p"}" data-day="${p.days[i].date}" data-eq="${esc(r.equipment)}" data-task="${esc(it.task)}"
+           title="${it.st === "done" ? "완료 · " + esc(it.who) : it.st === "late" ? "지연 · 눌러서 완료" : "눌러서 완료"}">${it.st === "done" ? "✓ " : ""}${esc(it.task)}</button>`).join("") + `</div>`).join("")).join("");
+}
+cal.onclick = e => {
+  const b = e.target.closest("button[data-task]"); if (!b) return;
+  post("/api/maint/pm", {day: b.dataset.day, equipment: b.dataset.eq, task: b.dataset.task, who: who()}).then(r => { if (r.pm) drawPm(r.pm); loadInfo(); });
+};
+loadInfo(); setInterval(loadInfo, 3000);
+poll(() => {});                                     // 헤더 상태 · 프레스 경고는 공통 1초 갱신
+
+// ---------- 정비 시작 (담당자 · 프레스는 정비 잠금 같이) ----------
+function post(url, body) {
+  return fetch(url, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body || {})}).then(r => r.json());
+}
+function startT(id) {
+  const t = tickets.find(x => x.id === id); if (!t) return;
+  const canLock = LOCKABLE.includes(t.equipment);
+  mdlRoot.innerHTML = `<div class="mdl-bg"><div class="mdl" role="dialog" aria-modal="true"><h3>정비 시작 · #${t.id} ${esc(t.equipment)}</h3>
+    <p>${esc(t.text)}</p>
+    <input type="text" id="stWho" placeholder="담당자 이름" maxlength="12" value="${esc(who())}">
+    ${canLock ? `<label class="small" style="display:flex;gap:8px;align-items:center;cursor:pointer"><input type="checkbox" id="stLock" checked> 정비 잠금(LOTO) 같이 걸기 — 정비 끝날 때까지 프레스 기동 금지</label>` : ""}
+    <div class="row" style="justify-content:flex-end"><button class="btn" id="stNo">취소</button><button class="btn primary" id="stOk">시작</button></div></div></div>`;
+  const close = () => mdlRoot.innerHTML = "";
+  stWho.focus();
+  stNo.onclick = close;
+  stOk.onclick = () => {
+    const nm = stWho.value.trim();
+    if (nm) { whoEl.value = nm; whoEl.onchange(); }
+    post(`/api/tickets/${id}/start`, {who: nm, lock: canLock && stLock.checked}).then(r => {
+      close(); showToast(`#${id} 정비 시작` + (r.locked ? " · 프레스 정비 잠금" : "")); lastKey = ""; loadInfo(); });
+  };
+  stWho.onkeydown = e => { if (e.key === "Enter") stOk.onclick(); if (e.key === "Escape") close(); };
+}
+
+// ---------- 정비 완료 + AI 판정 피드백 ----------
+let fbTicketRow = null;
+function chipGroup(el, name, items, pick) {
+  el.innerHTML = items.map(([v, label]) =>
+    `<label class="chip-opt"><input type="radio" name="${name}" value="${v}" ${pick === v ? "checked" : ""}><span>${label}</span></label>`).join("");
+}
+function done(id) {
+  const t = tickets.find(x => x.id === id);
+  if (!t) return;
+  fbTicketRow = t;
+  fbTicket.textContent = `티켓 #${t.id} · ${t.equipment}`;
+  fbText.textContent = t.text;
+  fbAi.innerHTML = `${TN[t.type] || t.type} · <span class="c-${UT[t.urgency]}">${USH[t.urgency]} ${U[t.urgency]}</span>`;
+  fbFix.style.display = "none";
+  chipGroup(fbTypes, "fbType", TEAMS, t.type);
+  chipGroup(fbUrgs, "fbUrg", [["상", "즉시"], ["중", "당일"], ["하", "정기"]], t.urgency);
+  fbNote.value = ""; fbAct.value = "";
+  fbDialog.showModal(); fbAct.focus();
+}
+function finish(feedback) {
+  const id = fbTicketRow.id;
+  const act = fbAct.value.trim();
+  fbDialog.close();
+  fetch(`/api/tickets/${id}/complete`, {method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({feedback, action: act})}).then(r => r.json()).then(r => {
+      const msg = !feedback ? "정비 완료" : (feedback.true_type === fbTicketRow.type && feedback.true_urgency === fbTicketRow.urgency)
+        ? "정비 완료 · AI 판정 맞음으로 기록" : "정비 완료 · 고친 정답이 AI 학습 데이터에 추가됨";
+      showToast(msg + (r.unlocked ? " · 정비 잠금 해제 (5초 뒤 프레스 재가동)" : "") + (r.restarted ? " · 설비 재가동" : ""));
+      lastKey = ""; loadInfo();
+    });
+}
+fbYes.onclick = () => finish({true_type: fbTicketRow.type, true_urgency: fbTicketRow.urgency});
+fbNo.onclick = () => { fbFix.style.display = "flex"; fbTypes.querySelector("input:checked")?.focus(); };
+fbSave.onclick = () => {
+  const ty = fbForm.querySelector('input[name="fbType"]:checked')?.value, ur = fbForm.querySelector('input[name="fbUrg"]:checked')?.value;
+  finish({true_type: ty, true_urgency: ur, note: fbNote.value.trim()});
+};
+fbSkip.onclick = () => finish(null);
+fbCancel.onclick = () => fbDialog.close();
+function showToast(text) {
+  toast.textContent = text; toast.hidden = false;
+  clearTimeout(showToast.t); showToast.t = setTimeout(() => toast.hidden = true, 3500);
+}
+</script>
+{% endblock %}
