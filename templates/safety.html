@@ -1,0 +1,357 @@
+{% extends "base.html" %}
+{% block head %}
+<style>
+/* 설비 안전 제어 (프레스 안전 인터록) — 위: 카메라 | 상태·재가동 조건·버튼 (같은 높이) */
+.top2{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:16px;align-items:stretch}
+.rcol{display:flex;flex-direction:column;gap:14px;min-width:0}
+.camwrap{position:relative;aspect-ratio:16/10}
+.camwrap.stop{border:2px solid var(--bad)}.camwrap.warn{border:2px solid var(--warn)}
+.cam-ov{position:absolute;left:12px;right:12px;top:12px;display:flex;justify-content:space-between;pointer-events:none}
+.cam-ov .tag{background:rgba(14,19,23,.85);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-weight:700;font-size:15px;letter-spacing:.06em}
+.cam-ov .tag.bad{background:var(--bad);border-color:var(--bad);color:#fff}.cam-ov .tag.warn{background:var(--warn);border-color:var(--warn);color:#1E1606}
+.cam-ov .tag.ok{color:var(--ok-tx)}
+.camfoot{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+.zl{display:inline-flex;align-items:center;gap:6px}.zl i{width:14px;height:10px;border:2px dashed;border-radius:2px}
+
+.sf-state{border-radius:14px;padding:16px 18px;border:1px solid var(--line);background:var(--panel);display:flex;gap:16px;align-items:center}
+.sf-state .ic{width:60px;height:60px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;flex:none;background:#26323A;color:var(--muted)}
+.sf-state h3{margin:0;font-size:24px}.sf-state p{margin:4px 0 0;font-size:13px;color:var(--muted)}
+.sf-state.ok{background:var(--ok-bg);border-color:var(--ok-bd)}.sf-state.ok .ic{background:var(--ok);color:#06231c}.sf-state.ok h3{color:var(--ok-tx)}
+.sf-state.warn{background:var(--warn-bg);border-color:var(--warn-bd)}.sf-state.warn .ic{background:var(--warn);color:#2B2210}.sf-state.warn h3{color:var(--warn-tx)}.sf-state.warn p{color:var(--warn-tx)}
+.sf-state.bad{background:var(--bad-bg);border-color:var(--bad-bd)}.sf-state.bad .ic{background:var(--bad);color:#fff}.sf-state.bad h3{color:var(--bad-tx)}.sf-state.bad p{color:var(--bad-tx)}
+
+.grow{flex:1}
+.ring{display:flex;gap:22px;align-items:center}
+.cond{display:flex;flex-direction:column;gap:8px;flex:1;min-width:0}
+.cond div{display:flex;align-items:center;gap:10px;font-size:15px;padding:0 14px;min-height:54px;border-radius:9px;background:var(--panel2);border:1px solid var(--line)}
+.cond .m{font-size:17px}
+.rs-sum{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.rs-sum>div{background:var(--panel2);border-radius:9px;padding:9px 12px}.rs-sum .l{font-size:11px;color:var(--muted)}.rs-sum .v{font-family:var(--mono);font-size:20px;font-weight:600}.rs-sum .v small{font-size:12px;color:var(--muted);font-family:inherit;margin-left:2px}
+.rs-list{display:flex;flex-direction:column;gap:6px}
+.rs-list div{display:flex;gap:10px;align-items:center;font-size:13px;padding:8px 12px;background:var(--panel2);border-radius:8px}
+.rs-list .t{font-family:var(--mono);color:var(--muted);font-size:12px;width:62px}.rs-list .r{margin-left:auto}
+.cond div .r{margin-left:auto;font-size:12px;color:var(--muted)}
+.cond div.x{border-color:var(--bad-bd);background:var(--bad-bg)}.cond div.x .r{color:var(--bad-tx)}
+.cond .m{width:16px;text-align:center;font-weight:700}
+.acts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.acts .btn{min-height:54px;font-size:15px}
+.btn.estop{background:#C93835;border-color:#F0605D;color:#fff}.btn.estop:hover{background:#D9443F}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+
+.ichain{display:flex;align-items:stretch;gap:0}
+.chn{flex:1;text-align:center;padding:12px 6px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);font-size:12px;min-width:0}
+.chn b{display:block;font-size:14px;margin-bottom:4px}
+.chn.bad{border-color:var(--bad-bd);background:var(--bad-bg);color:var(--bad-tx)}
+.chn.warn{border-color:var(--warn-bd);background:var(--warn-bg);color:var(--warn-tx)}
+.chn.ok{border-color:var(--ok-bd);background:var(--ok-bg);color:var(--ok-tx)}
+.ichain .arr{width:30px;display:flex;align-items:center;justify-content:center;color:var(--muted)}
+
+
+.bot3{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.05fr);gap:16px}
+.hours{display:flex;align-items:flex-end;gap:5px;height:130px}
+.hours .hc{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;gap:2px}
+.hours .hc i{display:block;border-radius:3px 3px 0 0}
+.hours .hc.future{opacity:.35}
+.hl{display:flex;gap:5px;font-size:10px;color:var(--muted)}.hl span{flex:1;text-align:center}
+.hl span.now{color:var(--data);font-weight:700}
+.evlist{display:flex;flex-direction:column;gap:8px;max-height:300px;overflow:auto}
+.ev{display:flex;gap:10px;align-items:center;padding:8px;border-radius:8px;background:var(--panel2);border:1px solid var(--line)}
+.ev .th{width:64px;height:40px;border-radius:6px;background:#0A0D10;flex:none;overflow:hidden;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:10px}
+.ev .th img{width:100%;height:100%;object-fit:cover;cursor:zoom-in}
+.ev .t{font-family:var(--mono);font-size:12px;color:var(--muted);width:60px;flex:none}
+.ev .m{flex:1;font-size:13px;min-width:0}.ev .m small{display:block;color:var(--muted);font-size:11px}
+.tag2{font-size:11px;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.tag2.r{background:var(--bad-bg);color:var(--bad-tx);border:1px solid var(--bad-bd)}
+.tag2.y{background:var(--warn-bg);color:var(--warn-tx);border:1px solid var(--warn-bd)}
+.tag2.g{background:var(--panel);color:var(--muted);border:1px solid var(--line2)}
+.chk{display:flex;flex-direction:column;gap:8px}
+.chk button{display:flex;align-items:center;gap:10px;padding:0 12px;min-height:44px;border-radius:8px;background:var(--panel2);border:1px solid var(--line);font:inherit;font-size:13px;color:var(--text);cursor:pointer;text-align:left}
+.chk button:hover{border-color:var(--line2)}
+.chk .bx{width:20px;height:20px;border-radius:5px;border:1.5px solid var(--line2);display:flex;align-items:center;justify-content:center;font-size:13px;flex:none}
+.chk .on .bx{background:var(--ok);border-color:var(--ok);color:#06231c}
+.chk .who{margin-left:auto;font-size:11px;color:var(--muted)}
+
+.zoom{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:1100;display:flex;align-items:center;justify-content:center;cursor:zoom-out}
+.zoom img{max-width:90vw;max-height:85vh;border-radius:10px}
+@media (max-width:1200px){.top2,.bot3{grid-template-columns:minmax(0,1fr)}.ichain{flex-direction:column}.ichain .arr{width:auto;height:18px;transform:rotate(90deg)}}
+</style>
+{% endblock %}
+{% block body %}
+<div class="pg-head">
+  <h1>프레스 안전 인터록</h1>
+  <span class="sub">CAM 3 금형부 위험구역 감시 · 비상 정지 · 자동 재가동 · 아차사고 기록</span>
+  <div class="right"><span class="pg-chip" id="safeChip">무재해 -일</span></div>
+</div>
+
+<!-- 안전 KPI (다른 페이지처럼 제목 바로 아래 숫자 카드 줄) -->
+<div class="kgrid5">
+  <div class="kc"><div class="ic ic-bad">■</div><div><div class="l">오늘 안전 정지</div><div class="v c-bad" id="kStops">-</div><div class="d" id="kStopsD">-</div></div></div>
+  <div class="kc"><div class="ic ic-warn">▲</div><div><div class="l">경고구역 접근</div><div class="v c-warn" id="kWarns">-</div><div class="d">정지 전 단계 알림</div></div></div>
+  <div class="kc"><div class="ic ic-data">⏱</div><div><div class="l">정지로 멈춘 시간</div><div class="v" id="kDown">-</div><div class="d" id="kDownD">-</div></div></div>
+  <div class="kc"><div class="ic ic-mut">↻</div><div><div class="l">평균 재가동 시간</div><div class="v" id="kAvg">-</div><div class="d" id="kAvgD">-</div></div></div>
+  <div class="kc"><div class="ic ic-ok">✓</div><div><div class="l">무재해</div><div class="v c-ok" id="kSafe">-</div><div class="d" id="kSafeD">-</div></div></div>
+</div>
+<div class="top2">
+  <!-- ① 카메라 (품질 관리와 같은 크기) -->
+  <section class="panel" aria-label="금형부 카메라" style="gap:10px">
+    <div class="row"><h2>CAM 3 · 프레스 금형부</h2>
+      <span class="small muted"><span class="zl"><i style="border-color:var(--bad)"></i>위험구역 · 즉시 정지</span> &nbsp; <span class="zl"><i style="border-color:var(--warn)"></i>경고구역 · 알림</span></span></div>
+    <div class="cam camwrap" id="camBox">
+      <img src="/safety/video" alt="프레스 금형부 카메라">
+      <div class="cam-ov"><span class="tag" id="camLive">● LIVE</span><span class="tag" id="camTag">-</span></div>
+    </div>
+    <div class="camfoot"><span id="camDet">감지 없음</span><span id="camToday">오늘 침입 -회 · 경고 -회</span></div>
+  </section>
+
+  <!-- 오른쪽 열: ② 상태 ③ 재가동 조건 ④ 버튼 (카메라 패널과 같은 높이) -->
+  <div class="rcol">
+    <section class="sf-state" id="stBox" aria-live="polite">
+      <div class="ic" id="stIc">●</div>
+      <div><h3 id="stT">-</h3><p id="stP">-</p></div>
+    </section>
+
+    <section class="panel grow" aria-label="재가동 조건">
+      <div class="row"><h2>재가동 조건</h2><span class="small muted">모두 ✓이면 {{ auto_sec|int }}초 뒤 자동 재가동</span></div>
+      <div class="ring">
+        <svg width="170" height="170" viewBox="0 0 140 140" aria-hidden="true" style="flex:none">
+          <circle cx="70" cy="70" r="58" fill="none" stroke="#26323A" stroke-width="12"/>
+          <circle id="rg" cx="70" cy="70" r="58" fill="none" stroke="#3CC6A8" stroke-width="12" stroke-linecap="round"
+                  stroke-dasharray="364.4" stroke-dashoffset="0" transform="rotate(-90 70 70)"/>
+          <text id="rgN" x="70" y="70" text-anchor="middle" fill="#E7EDF0" font-family="IBM Plex Mono" font-size="28" font-weight="600">-</text>
+          <text id="rgU" x="70" y="92" text-anchor="middle" fill="#93A3AD" font-size="12">-</text>
+        </svg>
+        <div class="cond" id="cond"></div>
+      </div>
+      <div class="rs-sum" id="rsSum"></div>
+      <div><div class="small muted" style="margin-bottom:6px">최근 재가동 (오늘)</div><div class="rs-list" id="rsList"></div></div>
+    </section>
+
+    <section class="panel" aria-label="안전 조작">
+      <div class="acts">
+        <button class="btn estop" id="bEstop">⏻ 비상 정지</button>
+        <button class="btn" id="bRestart">▶ 수동 재가동</button>
+        <button class="btn" id="bLock">🔒 정비 잠금</button>
+      </div>
+      <div class="small muted">수동 재가동 · 잠금 해제는 관리자 PIN · 누가 눌렀는지 기록됩니다</div>
+    </section>
+  </div>
+</div>
+
+<!-- ⑤ 인터록 연동 -->
+<section class="panel" aria-label="인터록 연동 상태">
+  <div class="row"><h2>인터록 연동 상태</h2><span class="small muted">프레스가 서면 컨베이어가 연동 정지 → 검사기 · 로봇은 제품이 안 와서 대기</span></div>
+  <div class="ichain" id="chain"></div>
+</section>
+
+
+
+
+<div class="bot3">
+  <!-- ⑦ 시간대별 -->
+  <section class="panel" aria-label="시간대별 침입">
+    <div class="row"><h2>시간대별 침입</h2><span class="small muted"><span class="c-bad">■</span> 정지 · <span class="c-warn">■</span> 경고</span></div>
+    <div class="hours" id="hours"></div>
+    <div class="hl" id="hoursL"></div>
+    <div class="small" id="peak" style="color:var(--warn-tx);min-height:18px"></div>
+  </section>
+
+  <!-- ⑧ 아차사고 기록 -->
+  <section class="panel" aria-label="아차사고 기록">
+    <div class="row"><h2>아차사고 기록</h2><span class="small muted">정지 · 경고 순간 화면 자동 저장</span></div>
+    <div class="evlist" id="rows"></div>
+  </section>
+
+  <!-- ⑨ 교대 전 안전 점검 -->
+  <section class="panel" aria-label="교대 전 안전 점검">
+    <div class="row"><h2>교대 전 안전 점검</h2><span class="small muted" id="chkN">-</span></div>
+    <div class="whoin">점검자 <input id="who" placeholder="이름" maxlength="12" style="width:120px"></div>
+    <div class="chk" id="chk"></div>
+  </section>
+</div>
+
+<div id="mdlRoot"></div>
+
+<script>
+const SF_KR = {hand: "손", screwdriver: "드라이버", balldriver: "볼드라이버", spanner: "스패너", object: "물체"};   // 아차사고 목록 이름 (modules/safety.py DANGER_CLASSES와 같게)
+const AUTO = {{ auto_sec|tojson }};
+const LINE = ["자재 투입기", "프레스 #1", "컨베이어", "비전 검사기", "로봇 적재기"];
+let S = {};
+const whoEl = document.getElementById("who");
+try { whoEl.value = localStorage.getItem("sf_who") || ""; } catch (e) {}
+whoEl.onchange = () => { try { localStorage.setItem("sf_who", whoEl.value.trim()); } catch (e) {} };
+const who = () => whoEl.value.trim();
+const dur = s => s == null ? "-" : s < 60 ? `${Math.round(s)}초` : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
+
+// ---------------------------------------------------------------- 1초마다: 상태 · 조건 · 연동
+function render(d) {
+  const s = S = d.modules.safety || {};
+  const stop = s.status === "안전 정지", hit = stop && s.zone_clear === false;
+  const lock = s.hold === "lock", estop = s.hold === "estop";
+  const mode = stop ? (lock ? "warn" : "bad") : s.warn ? "warn" : s.status ? "ok" : "";
+
+  // ② 상태 배너
+  stBox.className = "sf-state " + mode;
+  stIc.textContent = lock ? "🔒" : stop ? "■" : s.warn ? "▲" : "●";
+  const since = s.stop_since ? ` · ${time(s.stop_since)}부터 ${dur(Date.now() / 1000 - s.stop_since)}` : "";
+  const conv = d.equipment.find(e => e.name === "컨베이어") || {};
+  const convTxt = conv.status && conv.status !== "가동" ? ` · 컨베이어 ${conv.status}` : "";
+  if (!s.status) { stT.textContent = "안전 카메라 대기"; stP.textContent = "안전 모듈 상태를 기다리는 중"; }
+  else if (lock) { stT.textContent = "정비 잠금 · 기동 금지"; stP.textContent = `${s.lock_by || "작업자"} 정비 중${since}${convTxt}`; }
+  else if (estop) { stT.textContent = "비상 정지"; stP.textContent = `관리자 수동 재가동 필요${since}${convTxt}`; }
+  else if (stop) { stT.textContent = hit ? `안전 정지 · ${s.reason || "손"} 감지` : "안전 정지 · 재가동 대기"; stP.textContent = (hit ? "위험구역 침입 중" : "위험구역 비어 있음") + since + convTxt; }
+  else if (s.warn) { stT.textContent = "경고 · 위험구역 접근"; stP.textContent = `경고구역에서 ${s.det ? (s.det.name || s.det.cls) : "물체"} 감지 · ${(s.warn_sec || 0).toFixed(1)}초째 · 정지는 안 함`; }
+  else { stT.textContent = "가동 · 위험구역 감시 중"; stP.textContent = s.camera === false ? "안전 카메라 없음 · 비상 정지 · 정비 잠금 버튼은 동작" : "위험구역 · 경고구역 모두 비어 있음"; }
+
+  // ① 카메라 테두리 · 태그
+  camBox.className = "cam camwrap " + (stop && !lock ? "stop" : s.warn || lock ? "warn" : "");
+  camTag.className = "tag " + (stop ? (lock ? "warn" : "bad") : s.warn ? "warn" : "ok");
+  camTag.textContent = lock ? "🔒 LOCK" : stop ? "■ STOP" : s.warn ? "▲ WARN" : "● RUN";
+  camLive.textContent = s.camera === false ? "○ NO CAMERA" : "● LIVE";
+  camDet.textContent = s.det ? `${s.det.name || s.det.cls} ${Number(s.det.conf).toFixed(2)} · ${s.det.zone === "danger" ? "위험구역 침입" : "경고구역 접근"}` : "감지 없음";
+
+  // ③ 재가동 조건 + 링
+  const clear = !stop ? AUTO : hit ? 0 : Math.min(AUTO, s.clear_seconds || 0);
+  const conds = [
+    [!hit, "위험구역 비어 있음", stop && !hit && !estop && !lock ? `${clear.toFixed(1)} / ${AUTO}초` : hit ? "손 감지" : ""],
+    [!estop, "비상 정지 버튼 해제", estop ? "관리자 수동 재가동" : ""],
+    [!lock, "정비 잠금(LOTO) 없음", lock ? `${s.lock_by || ""} ${s.lock_ts ? time(s.lock_ts).slice(0, 5) : ""}` : ""],
+  ];
+  cond.innerHTML = conds.map(([ok, t, r]) => `<div class="${ok ? "" : "x"}"><span class="m ${ok ? "c-ok" : "c-bad"}">${ok ? "✓" : "✕"}</span>${t}<span class="r">${esc(r)}</span></div>`).join("");
+  const C = 364.4;
+  let frac = 1, col = "#3CC6A8", n = "RUN", u = "가동 중";
+  if (stop) {
+    if (hit) { frac = 0; col = "#F0605D"; n = "STOP"; u = "손 감지"; }
+    else if (estop) { frac = 0; col = "#F0605D"; n = "E-STOP"; u = "수동 재가동"; }
+    else if (lock) { frac = 0; col = "#F5B544"; n = "LOCK"; u = "정비 중"; }
+    else { frac = clear / AUTO; col = "#F5B544"; n = Math.max(0, s.auto_release_in ?? (AUTO - clear)).toFixed(1); u = "초 후 재가동"; }
+  } else if (s.warn) { col = "#F5B544"; n = "WARN"; u = "접근 감지"; }
+  rg.setAttribute("stroke", col); rg.setAttribute("stroke-dashoffset", (C * (1 - frac)).toFixed(1));
+  rgN.textContent = n; rgU.textContent = u; rgN.setAttribute("font-size", n.length > 4 ? 22 : 28);
+
+  // ④ 버튼
+  bRestart.disabled = !stop || lock || hit;
+  bRestart.title = !stop ? "가동 중" : lock ? "정비 잠금을 먼저 해제하세요" : hit ? "위험구역에 손이 보여요" : "";
+  bLock.innerHTML = lock ? "🔓 잠금 해제" : "🔒 정비 잠금";
+
+  // ⑤ 연동 (프레스 → 컨베이어 연동 정지 → 검사기 · 로봇은 제품이 안 와서 대기)
+  const eq = Object.fromEntries(d.equipment.map(e => [e.name, e]));
+  const lineStop = (eq["컨베이어"] || {}).status && eq["컨베이어"].status !== "가동";
+  chain.innerHTML = LINE.map((nm, i) => {
+    const e = eq[nm] || {}, st = e.status || "-";
+    let cls = tone(st), sub = `${shape(st)} ${st}`;
+    if (nm === "프레스 #1" && cls === "bad") sub += " · 원인";
+    if ((nm === "비전 검사기" || nm === "로봇 적재기") && st === "가동" && lineStop) { cls = "warn"; sub = "▲ 제품 없음 · 대기"; }
+    if (nm === "자재 투입기" && st === "가동" && lineStop) sub = "● 가동 · 투입 대기";
+    return (i ? '<div class="arr" aria-hidden="true">→</div>' : "") + `<div class="chn ${cls === "idle" ? "" : cls}"><b>${nm}</b>${esc(sub)}</div>`;
+  }).join("");
+}
+poll(render);
+
+// ---------------------------------------------------------------- 5초마다: KPI · 시간대 · 아차사고 · 점검
+function loadInfo() {
+  fetch("/api/safety/info").then(r => r.json()).then(drawInfo).catch(() => {});
+}
+function drawInfo(d) {
+  const k = d.kpi;
+  safeChip.innerHTML = `무재해 <b class="mono">${k.safe_days}일</b>` + (k.last_stop ? ` · 마지막 안전 정지 ${time(k.last_stop).slice(0, 5)}` : " · 오늘 안전 정지 없음");
+  camToday.textContent = `오늘 침입 ${k.stops}회 · 경고 ${k.warns}회`;
+  kStops.innerHTML = `${k.stops}<small>회</small>`;
+  const dlt = k.stops - k.stops_y;
+  kStopsD.textContent = `어제 ${k.stops_y}회 · ${dlt > 0 ? "▲" + dlt : dlt < 0 ? "▼" + (-dlt) : "같음"}` + (k.estops ? ` · 비상 정지 ${k.estops}` : "");
+  kWarns.innerHTML = `${k.warns}<small>회</small>`;
+  kDown.textContent = dur(k.down_sec);
+  kDownD.textContent = `생산 손실 ≈ ${k.loss}개`;
+  kAvg.innerHTML = k.avg_restart == null ? "-" : k.avg_restart < 60 ? `${k.avg_restart}<small>초</small>` : dur(k.avg_restart);
+  kAvgD.textContent = `자동 ${k.auto} · 수동 ${k.manual}`;
+  kSafe.innerHTML = `${k.safe_days}<small>일</small>`;
+  kSafeD.textContent = `목표 ${k.safe_goal}일`;
+
+  // ⑦ 시간대
+  const mx = Math.max(3, ...d.hours.map(h => h.stops + h.warns));
+  const nowH = new Date().getHours();
+  hours.innerHTML = d.hours.map(h => `<div class="hc ${h.future ? "future" : ""}" title="${h.h}시 · 정지 ${h.stops} · 경고 ${h.warns}">
+      <i style="height:${h.warns / mx * 100}%;background:#8A6A2A"></i><i style="height:${h.stops / mx * 100}%;background:var(--bad)"></i>
+      ${h.stops + h.warns ? "" : '<i style="height:3px;background:#26323A"></i>'}</div>`).join("");
+  hoursL.innerHTML = d.hours.map(h => `<span class="${h.h === nowH && !h.future ? "now" : ""}">${String(h.h).padStart(2, "0")}</span>`).join("");
+  peak.textContent = d.peak ? `▲ ${d.peak.h}시대에 가장 많음 (정지 ${d.peak.stops} · 경고 ${d.peak.warns}) → 그 시간 작업 확인` : "";
+
+  // ⑧ 아차사고
+  const K = {hit: ["정지", "r", "위험구역 침입 → 안전 정지"], estop: ["E-STOP", "r", "비상 정지 버튼"],
+             lock: ["정비 잠금", "g", "정비 잠금 (LOTO)"], warn: ["경고", "y", "경고구역 접근"]};
+  rows.innerHTML = d.rows.map(r => {
+    const [tg, c, t] = K[r.kind] || ["-", "g", r.kind];
+    const what = r.cls ? `${SF_KR[String(r.cls).toLowerCase()] || r.cls}${r.conf != null ? " " + Number(r.conf).toFixed(2) : ""} · ` : "";
+    const sub = r.kind === "warn" ? `${what}정지 없음` : r.open ? `${what}정지 중 · ${dur(r.dur)}` : `${what}정지 ${dur(r.dur)} · ${r.how}`;
+    const th = r.snap ? `<img src="/safety/snap/${encodeURIComponent(r.snap)}" alt="정지 순간 화면" loading="lazy" data-z="1">` : (r.kind === "warn" || r.kind === "hit" ? "사진 없음" : "-");
+    return `<div class="ev"><div class="th">${th}</div><span class="t">${time(r.ts)}</span><div class="m">${t}<small>${esc(sub)}</small></div><span class="tag2 ${c}">${tg}</span></div>`;
+  }).join("") || '<div class="muted small">오늘 기록 없음 · 무사고 진행 중</div>';
+
+  // 재가동 조건 칸 아래: 오늘 재가동 요약 · 최근 3건
+  rsSum.innerHTML = `<div><div class="l">자동 재가동</div><div class="v">${k.auto}<small>회</small></div></div>` +
+    `<div><div class="l">수동 재가동 (PIN)</div><div class="v">${k.manual}<small>회</small></div></div>` +
+    `<div><div class="l">평균 재가동까지</div><div class="v">${k.avg_restart == null ? "-" : k.avg_restart < 60 ? k.avg_restart + "<small>초</small>" : dur(k.avg_restart)}</div></div>`;
+  const rs = d.rows.filter(r => (r.kind === "hit" || r.kind === "estop") && !r.open).slice(0, 3);
+  rsList.innerHTML = rs.map(r => `<div><span class="t">${time(r.ts)}</span>${r.kind === "estop" ? "비상 정지" : "손 감지 정지"} → ${esc(r.how || "재가동")}<span class="r mono ${r.dur > 60 ? "c-warn" : "muted"}">${dur(r.dur)}</span></div>`).join("")
+    || '<div class="muted">오늘 정지 없음 · 무사고 진행 중</div>';
+
+  drawCheck(d.check);      // ⑨ 점검
+}
+function drawCheck(list) {
+  const n = list.filter(c => c.ts).length;
+  chkN.textContent = `${n} / ${list.length} 완료`;
+  chkN.className = "small " + (n === list.length ? "c-ok" : "muted");
+  chk.innerHTML = list.map(c => `<button class="${c.ts ? "on" : ""}" data-i="${c.i}"><span class="bx">${c.ts ? "✓" : ""}</span>${esc(c.text)}<span class="who">${c.ts ? time(c.ts).slice(0, 5) + " " + esc(c.who || "") : ""}</span></button>`).join("");
+}
+chk.onclick = e => {
+  const b = e.target.closest("[data-i]"); if (!b) return;
+  post("/api/safety/check", {i: +b.dataset.i, who: who()}).then(r => r.check && drawCheck(r.check));
+};
+rows.onclick = e => {
+  const im = e.target.closest("img[data-z]"); if (!im) return;
+  const z = document.createElement("div"); z.className = "zoom"; z.innerHTML = `<img src="${im.src}" alt="">`;
+  z.onclick = () => z.remove(); document.body.appendChild(z);
+};
+loadInfo(); setInterval(loadInfo, 5000);
+
+// ---------------------------------------------------------------- 버튼
+function post(url, body) {
+  return fetch(url, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body || {})})
+    .then(r => r.json().then(j => ({...j, ok: r.ok && j.ok !== false})));
+}
+// 작은 입력 창 (브라우저 기본 대화상자 대신)
+function ask({title, text, pin, placeholder, ok, err = ""}) {
+  return new Promise(res => {
+    mdlRoot.innerHTML = `<div class="mdl-bg"><div class="mdl" role="dialog" aria-modal="true"><h3>${title}</h3><p>${text}</p>
+      <input id="mdlIn" type="${pin ? "password" : "text"}" inputmode="${pin ? "numeric" : "text"}" placeholder="${placeholder}" autocomplete="off">
+      <div class="err">${esc(err)}</div>
+      <div class="row" style="justify-content:flex-end"><button class="btn" id="mdlNo">취소</button><button class="btn primary" id="mdlOk">${ok}</button></div></div></div>`;
+    const inp = document.getElementById("mdlIn"); inp.focus();
+    const done = v => res(v);
+    document.getElementById("mdlNo").onclick = () => done(null);
+    document.getElementById("mdlOk").onclick = () => done(inp.value.trim());
+    inp.onkeydown = e => { if (e.key === "Enter") done(inp.value.trim()); if (e.key === "Escape") done(null); };
+  });
+}
+const closeMdl = () => mdlRoot.innerHTML = "";
+async function withPin(title, text, url, body) {
+  let err = "";
+  for (;;) {
+    const pin = await ask({title, text, pin: true, placeholder: "관리자 PIN", ok: "확인", err});
+    if (pin === null) return closeMdl();
+    const r = await post(url, {...body, pin});
+    if (r.ok) { closeMdl(); loadInfo(); return; }
+    err = r.msg || "실패했어요";
+    if (!/PIN/.test(err)) text = err;        // PIN 말고 다른 이유(손 감지 등)면 안내 문구를 바꿔 다시 보여 줌
+  }
+}
+bEstop.onclick = () => post("/api/safety/estop", {who: who()}).then(loadInfo);     // 비상 정지는 확인 없이 즉시
+bRestart.onclick = () => withPin("수동 재가동", "위험구역이 비어 있는지 눈으로 확인한 뒤 재가동하세요.", "/api/safety/restart", {who: who()});
+bLock.onclick = async () => {
+  if (S.hold === "lock") return withPin("정비 잠금 해제", `잠금을 풀면 위험구역이 ${AUTO}초 동안 비어 있을 때 프레스가 다시 작동합니다.`, "/api/safety/lock", {on: false, who: who()});
+  const nm = await ask({title: "정비 잠금 (LOTO)", text: "정비하는 동안 프레스가 절대 켜지지 않게 잠급니다. 잠그는 사람 이름을 적어 주세요.", placeholder: "이름", ok: "잠금"});
+  closeMdl();
+  if (nm === null) return;
+  post("/api/safety/lock", {on: true, who: nm || who() || "작업자"}).then(loadInfo);
+};
+</script>
+{% endblock %}
