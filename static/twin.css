@@ -1,0 +1,298 @@
+/* 디지털 트윈 화면 */
+.twin{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(480px,1fr);gap:16px;flex-grow:1;min-height:0}   /* 오른쪽 정보 칸을 넓게 (예전: 380px 고정) */
+.scene{position:relative;background:#11181C;border:1px solid var(--line);border-radius:16px;overflow:hidden;min-height:560px}
+.scene svg{position:absolute;inset:0;width:100%;height:100%;display:block}
+.scene .overlay{position:absolute;left:16px;top:14px;display:flex;gap:8px;flex-wrap:wrap;z-index:1}
+.chipx{font-size:13px;padding:6px 12px;border-radius:999px;background:var(--panel2);border:1px solid var(--line2);color:var(--text)}
+
+/* 설비: 마우스를 올리면 밝게, 선택하면 파란 빛, 정지면 빨간·주황 빛 */
+.eq{cursor:pointer;transition:filter .2s}
+.eq:hover{filter:brightness(1.3)}
+.eq.glow-warn{filter:drop-shadow(0 0 8px rgba(245,181,68,.65))}
+.eq.glow-bad{filter:drop-shadow(0 0 10px rgba(240,96,93,.85))}
+.eq.sel{filter:drop-shadow(0 0 3px #4CC3FF) drop-shadow(0 0 10px rgba(76,195,255,.7))}
+
+/* 움직임 (정지하면 그 자리에서 멈춤) */
+@keyframes tw-ram{0%,100%{transform:translateY(0)}50%{transform:translateY(26px)}}
+@keyframes tw-shake{0%,100%{transform:translateX(0)}50%{transform:translateX(2px)}}
+@keyframes tw-belt{to{stroke-dashoffset:-22}}
+@keyframes tw-scan{0%,100%{opacity:.08}50%{opacity:.35}}
+@keyframes tw-arm{0%,100%{transform:rotate(-14deg)}50%{transform:rotate(16deg)}}
+@keyframes tw-blink{50%{opacity:.2}}
+.tw-ram{animation:tw-ram 1.2s ease-in-out infinite}
+.tw-shake{animation:tw-shake .2s linear infinite}
+.tw-belt{animation:tw-belt .7s linear infinite}
+.tw-scan{animation:tw-scan 1.2s ease-in-out infinite}
+.tw-arm{animation:tw-arm 2.6s ease-in-out infinite;transform-box:view-box;transform-origin:628px 402px}
+.eq.stop .anim{animation-play-state:paused}
+
+/* 표시등 */
+.lampx .halo{opacity:.25}
+.lampx.t-ok .dot,.lampx.t-ok .halo{fill:var(--ok)}
+.lampx.t-warn .dot,.lampx.t-warn .halo{fill:var(--warn)}
+.lampx.t-bad .dot,.lampx.t-bad .halo{fill:var(--bad)}
+.lampx.t-idle .dot,.lampx.t-idle .halo{fill:#7F919C}
+.lampx.blink{animation:tw-blink .8s step-end infinite}
+
+/* 이름표 */
+.chip{cursor:pointer}
+.chip rect{fill:rgba(21,28,33,.92);stroke:#33424C;stroke-width:1}
+.chip text{font-family:'IBM Plex Sans KR',sans-serif;font-size:13px;fill:#B9C6CD}
+.chip.t-warn rect{fill:#2B2210;stroke:#F5B544}.chip.t-warn text{fill:#FFD58A;font-weight:700}
+.chip.t-bad rect{fill:#2A1213;stroke:#F0605D}.chip.t-bad text{fill:#FFD2D0;font-weight:700}
+.chip.on rect{stroke:#4CC3FF;stroke-width:2}.chip.on text{fill:#E7EDF0}
+
+/* 오른쪽 패널 */
+.eqlist{display:flex;flex-direction:column;gap:8px}
+.eqbtn{display:flex;justify-content:space-between;align-items:center;min-height:48px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-family:inherit;font-size:14px;cursor:pointer;text-align:left}
+.eqbtn:hover{border-color:var(--data)}
+.eqbtn.t-bad{background:var(--bad-bg);border-color:var(--bad-bd)}.eqbtn.t-warn{background:var(--warn-bg);border-color:var(--warn-bd)}
+.stat3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.stat3>div{background:var(--panel2);border-radius:8px;padding:10px}
+.stat3 .v{font-family:var(--mono);font-size:18px;font-weight:600}
+.nocam{aspect-ratio:16/9;border:1px dashed var(--line);border-radius:10px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px}
+@media (max-width:1200px){.twin{grid-template-columns:minmax(0,1fr)}}
+
+/* ===================== 고도화: 모드 버튼 ===================== */
+.overlay.right{left:auto;right:16px}
+.seg{display:flex;gap:4px;padding:3px;border-radius:999px;background:rgba(21,28,33,.9);border:1px solid var(--line2)}
+.seg button,.tbtn{font-family:inherit;font-size:13px;min-height:32px;padding:0 12px;border-radius:999px;border:0;background:transparent;color:var(--muted);cursor:pointer}
+.seg button:hover,.tbtn:hover{color:var(--text)}
+.seg button.on{background:#0F2A38;color:#A8E2FF;font-weight:600;box-shadow:inset 0 0 0 1px #2A6B8E}
+.tbtn{background:rgba(21,28,33,.9);border:1px solid var(--line2);color:var(--text)}
+.tbtn.on{background:#0F2A38;border-color:#2A6B8E;color:#A8E2FF;font-weight:600}
+.scene.past{border-color:#2A6B8E;box-shadow:inset 0 0 0 3px rgba(76,195,255,.35)}
+.scene.sim{border-color:#2A6B8E}
+.legend{position:absolute;left:16px;bottom:66px;z-index:1;width:300px;padding:10px 12px;border-radius:12px;background:rgba(27,36,42,.95);border:1px solid var(--line)}
+.legend .bar{height:10px;border-radius:4px;margin-top:6px}
+.legend .ends{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
+
+/* 이름표 추가 색 */
+.chip.t-ok rect{fill:#12302A;stroke:#2A6B5C}.chip.t-ok text{fill:#7FE3C8;font-weight:600}
+.chip.t-data rect{fill:#0F2A38;stroke:#2A6B8E}.chip.t-data text{fill:#A8E2FF;font-weight:600}
+
+/* ===================== ② 위험구역 · 불량 추적 ===================== */
+.zone .zf{fill:#F0605D;opacity:0;transition:opacity .3s}
+.zone .zl{fill:none;stroke:#93A3AD;stroke-width:1.5;stroke-dasharray:8 6;opacity:.45}
+.zone.hold .zf{opacity:.16}.zone.hold .zl{stroke:#F0605D;opacity:.9}
+.zone.hit .zf{opacity:.3;animation:tw-zone .8s ease-in-out infinite}.zone.hit .zl{stroke:#F0605D;stroke-width:2.5;opacity:1}
+@keyframes tw-zone{50%{opacity:.08}}
+.zlabel{opacity:0;transition:opacity .2s;pointer-events:none}
+.zlabel.show{opacity:1}
+.zlabel rect{fill:#2A1213;stroke:#8E2F2D}
+.zlabel text{font-family:'IBM Plex Sans KR',sans-serif;font-size:13px;font-weight:700;fill:#FFB3B0}
+.zlabel.hit rect{stroke:#F0605D}
+.binlabel rect{fill:rgba(42,18,19,.92);stroke:#8E2F2D}
+.binlabel text{font-family:'IBM Plex Sans KR',sans-serif;font-size:12px;font-weight:600;fill:#FFB3B0}
+.binlabel.flash rect{animation:tw-flash .8s ease-out}
+@keyframes tw-flash{0%{fill:#8E2F2D;stroke:#F0605D}100%{fill:rgba(42,18,19,.92)}}
+.dtag{opacity:0;transition:opacity .25s;pointer-events:none}
+.dtag.show{opacity:1}
+.dtag rect{fill:#2A1213;stroke:#8E2F2D}
+.dtag .t1{font-family:'IBM Plex Sans KR',sans-serif;font-size:13px;font-weight:700;fill:#FFB3B0}
+.dtag .t2{font-family:var(--mono);font-size:12px;fill:#FFB3B0}
+
+/* ===================== ④ 가정 시뮬레이션 ===================== */
+/* 숨겨도 애니메이션은 계속 돌게 opacity로 숨김 (display:none이면 다시 보일 때 실제 제품과 박자가 어긋남) */
+.tw-prod.ghost{opacity:0;transition:opacity .4s}
+.tw-prod.ghost.show{opacity:.5}
+.focusfloor{fill:rgba(245,181,68,.16);stroke:#F5B544;stroke-width:2;stroke-dasharray:6 6}
+.eq.focus{filter:drop-shadow(0 0 8px rgba(245,181,68,.7))}
+.sim-row{padding:10px 0;border-bottom:1px solid var(--line)}
+.sim-row .top{display:flex;justify-content:space-between;gap:8px;font-size:14px}
+.sim-row .val{font-family:var(--mono);white-space:nowrap}
+.sim-row .val b{color:#A8E2FF}
+.sim-row input[type=range]{width:100%;margin:10px 0 4px;accent-color:#4CC3FF;min-height:24px}
+.kpi2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+.kpi2>div{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0}
+.kpi2 .now{font-family:var(--mono);font-size:14px;color:var(--muted)}
+.kpi2 .new{font-family:var(--mono);font-size:22px;font-weight:600}
+.kpi2 .d{font-family:var(--mono);font-size:13px}
+.apq{display:grid;grid-template-columns:44px 1fr;gap:6px 10px;align-items:center;font-size:13px}
+.apq .bars{display:flex;flex-direction:column;gap:3px}
+.apq .b{height:10px;border-radius:3px;display:flex;align-items:center}
+.apq .b span{margin-left:calc(100% + 6px);font-family:var(--mono);font-size:11px;white-space:nowrap}
+.apq .b.cur{background:#33424C;color:var(--muted)}.apq .b.new{background:#4CC3FF;color:#A8E2FF}
+
+/* ===================== ① 레이어 순위 ===================== */
+.rank{display:flex;flex-direction:column}
+.rank button{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;min-height:44px;padding:0 4px;
+  border:0;border-bottom:1px solid var(--line);background:none;color:var(--text);font-family:inherit;font-size:14px;cursor:pointer;text-align:left}
+.rank button:hover{background:var(--panel2)}
+.rank .sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:8px;vertical-align:-1px}
+.rank .m{font-family:var(--mono);text-align:right}.rank .s{font-family:var(--mono);color:var(--muted);text-align:right;min-width:48px}
+.mini-seg{display:flex;gap:4px}
+.mini-seg button{font-family:inherit;font-size:12px;min-height:30px;padding:0 10px;border-radius:8px;border:1px solid var(--line2);background:var(--panel2);color:var(--muted);cursor:pointer}
+.mini-seg button.on{color:#A8E2FF;border-color:#2A6B8E;background:#0F2A38}
+
+/* ===================== ③ 사건 리플레이 ===================== */
+.replay{grid-column:1/-1;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:12px 16px 8px}
+.replay .ctrl{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+.replay .ctrl .btn{min-height:36px;padding:0 12px}
+.replay .ctrl .btn.on{background:#4CC3FF;color:#0E1317;border-color:#4CC3FF;font-weight:700}
+.replay svg{width:100%;display:block;touch-action:none;cursor:ew-resize;user-select:none}
+.replay svg text{font-family:'IBM Plex Sans KR',sans-serif}
+.replay .mk{cursor:pointer}
+.momentlist{display:flex;flex-direction:column;gap:6px}
+.momentlist>div{display:flex;justify-content:space-between;align-items:center;min-height:36px;padding:0 12px;border-radius:8px;background:var(--panel2);font-size:14px}
+.steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:13px}
+.steps li{display:grid;grid-template-columns:64px 1fr;gap:8px}
+.steps .tm{font-family:var(--mono);color:var(--muted)}
+.steps li.future{opacity:.4}
+.c-data{color:#A8E2FF}
+
+/* hidden 속성이 display 설정보다 우선하게 (숨긴 기능 버튼) */
+[hidden]{display:none !important}
+
+/* 오른쪽 정보 칸 글자·칸 크게 (라인 요약 / 설비 상세) */
+.twin>.panel{padding:22px 24px;gap:18px}
+.twin>.panel h2{font-size:20px}
+.twin .stat3{gap:10px}
+.twin .stat3>div{padding:14px 14px}
+.twin .stat3 .small{font-size:13px}
+.twin .stat3 .v{font-size:24px}
+.twin .eqbtn{min-height:58px;padding:0 18px;font-size:16px}
+.twin .log{font-size:15px}
+#dName{font-size:26px !important}
+#dStatus{font-size:26px !important}
+.twin .rank button{min-height:52px;font-size:15px}
+/* 오른쪽 칸이 길어져도 장면은 화면 높이에 고정 (스크롤해도 따라옴) */
+.twin{align-items:start}
+.twin>.scene{position:sticky;top:12px;height:max(560px,calc(100vh - 170px))}
+@media (max-width:1200px){.twin>.scene{position:relative;height:auto}}
+/* 자재 투입 AMR 라이다 깜빡임 (멈추면 같이 멈춤) */
+.tw-lidar{animation:tw-blink 1s step-end infinite}
+.eq.stop .tw-lidar{animation-play-state:paused}
+
+/* 불량함 메뉴 */
+.binlabel{cursor:pointer}
+.reject.eq.sel,.binlabel.sel{filter:drop-shadow(0 0 3px #4CC3FF) drop-shadow(0 0 10px rgba(76,195,255,.7))}
+.bintypes{display:flex;flex-direction:column;gap:8px}
+.bintypes .bt{display:grid;grid-template-columns:90px minmax(0,1fr) 40px;gap:10px;align-items:center;font-size:14px}
+.bintypes .bt .mono{text-align:right}
+.binview{display:flex;flex-direction:column;gap:6px}
+.binview img,.binview .noimg{width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:10px;border:1px solid var(--bad-bd);background:#0A0D10}
+.binview .noimg{display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px}
+.binview .cap{display:flex;gap:12px;font-size:14px}
+.binlist{display:flex;flex-direction:column;gap:6px;max-height:320px;overflow:auto}
+.binlist button{display:grid;grid-template-columns:64px 76px minmax(0,1fr) auto;gap:10px;align-items:center;min-height:48px;padding:4px 10px 4px 4px;
+  border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-family:inherit;font-size:14px;cursor:pointer;text-align:left}
+.binlist button:hover{border-color:var(--data)}
+.binlist button.on{border-color:var(--bad);background:var(--bad-bg)}
+.binlist img{width:64px;height:40px;object-fit:cover;border-radius:5px}
+.binlist .ph{width:64px;height:40px;border-radius:5px;background:#2A1213;color:var(--bad);display:flex;align-items:center;justify-content:center}
+
+/* 불량함 목록 (사진 없이 시각 · 종류 · 번호) */
+.binlist{max-height:560px}
+.binlist .binrow{display:grid;grid-template-columns:28px 84px minmax(0,1fr) auto;gap:10px;align-items:center;min-height:44px;padding:0 12px 0 8px;
+  border-radius:8px;border:1px solid var(--line);background:var(--panel2);font-size:15px}
+.binlist .binrow .ph{width:24px;height:24px;font-size:12px}
+
+/* 작업자 대시보드(키오스크) · 작업자 */
+.hmi,.hmi-chip{cursor:pointer}
+.hmi.sel,.hmi-chip.sel rect{filter:drop-shadow(0 0 3px #4CC3FF) drop-shadow(0 0 10px rgba(76,195,255,.7))}
+.hmi-chip.sel rect{stroke:#4CC3FF;stroke-width:2}
+#tw-worker .blink{animation:tw-blink .8s step-end infinite}
+#tw-worker{pointer-events:none}
+
+/* ① 안전 게이트 · ⑥ 출하장 (눌러서 정보 보기) */
+.gate,.ship,.place-chip{cursor:pointer}
+.gate.sel,.ship.sel{filter:drop-shadow(0 0 3px #4CC3FF) drop-shadow(0 0 10px rgba(76,195,255,.7))}
+.place-chip.sel rect{stroke:#4CC3FF;stroke-width:2}
+
+/* ⑥ LOT 안내판 (트럭 위) */
+.lotboard .lb-bg{fill:rgba(15,42,56,.96);stroke:#2A6B8E}
+.lotboard .lb-t1{font-size:13px;fill:#A8E2FF}
+.lotboard .lb-t2{font-size:17px;font-weight:700;fill:#E7EDF0}
+.lotboard .lb-t3{font-size:13px;fill:#FFD58A;font-family:var(--mono, "IBM Plex Mono", monospace)}
+.lotboard .lb-bar0{fill:#26323A}.lotboard .lb-bar{fill:#4CC3FF}
+.lotboard.done .lb-bg{fill:#12302A;stroke:#3CC6A8}
+.lotboard.done .lb-t1{fill:#7FE3C8;font-weight:700}.lotboard.done .lb-t2{font-size:13px;font-weight:500;fill:#C9D3D9}
+.lotboard.done .lb-bar{fill:#3CC6A8}
+.lotboard text{font-family:'IBM Plex Sans KR',sans-serif}
+.lotboard.sel .lb-bg{stroke:#4CC3FF;stroke-width:2}
+.lotboard.sel .lb-bar,.lotboard.sel .lb-bar0{stroke:none}
+.state.t-data{background:#0F2A38;border-color:#2A6B8E;color:#A8E2FF}
+
+/* 확대 · 축소 · 이동 */
+#sceneSvg{cursor:grab;touch-action:none}
+#sceneSvg.dragging{cursor:grabbing}
+#sceneSvg .eq,#sceneSvg .chip,#sceneSvg .place-chip{cursor:pointer}
+.zoomctl{position:absolute;left:16px;bottom:14px;z-index:1;display:flex;align-items:center;gap:4px;background:rgba(21,28,33,.92);border:1px solid var(--line);border-radius:10px;padding:4px}
+.zoomctl button{width:36px;height:36px;border:0;border-radius:7px;background:transparent;color:var(--text);font-size:18px;cursor:pointer}
+.zoomctl button:hover{background:var(--panel2)}
+.zoomctl span{font-family:var(--mono,"IBM Plex Mono",monospace);font-size:12px;color:var(--muted);min-width:42px;text-align:center}
+
+/* ===================== 10/07 고도화: 신호등 탑 · 설비 메뉴 ===================== */
+/* 신호등 탑: 설비 상태에 맞는 칸만 켬 (가동 = 초록 · 주의 = 노랑 · 정지 = 빨강) */
+.stk.t-ok .stk-g polygon{fill:#3CC6A8}
+.stk.t-warn .stk-y polygon{fill:#F5B544}
+.stk.t-bad .stk-r polygon{fill:#F0605D;animation:tw-blink .8s step-end infinite}
+.stk.t-idle .stk-g polygon{fill:#7F919C}
+/* 설비 메뉴 공통 틀 */
+.sd-hd{display:flex;align-items:center;gap:12px}
+.sd-hd .ic{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex:none;background:var(--panel2)}
+.sd-hd .ic.t-ok{background:var(--ok-bg)}.sd-hd .ic.t-warn{background:var(--warn-bg)}.sd-hd .ic.t-bad{background:var(--bad-bg)}
+.sd-hd .nm{font-size:22px;font-weight:700}
+.sd-st{border-radius:12px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;border:1px solid var(--line);background:var(--panel2)}
+.sd-st b{font-size:17px}.sd-st span{font-size:12px;text-align:right}
+.sd-st.t-ok{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--ok-tx)}
+.sd-st.t-warn{background:var(--warn-bg);border-color:var(--warn-bd);color:var(--warn-tx)}
+.sd-st.t-bad{background:var(--bad-bg);border-color:var(--bad-bd);color:var(--bad-tx)}
+.sd-n3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.sd-n3>div{background:var(--panel2);border-radius:9px;padding:9px 11px;min-width:0}
+.sd-n3 .l{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sd-n3 .v{font-family:var(--mono);font-size:20px;font-weight:600}.sd-n3 .v small{font-size:11px;color:var(--muted);font-family:inherit;margin-left:2px}
+.sd-sec{font-size:13px;font-weight:600;display:flex;justify-content:space-between;gap:8px;margin-bottom:6px}.sd-sec span{font-size:11px;color:var(--muted);font-weight:400}
+.sd-list{display:flex;flex-direction:column;gap:5px}
+.sd-list>div{display:flex;gap:8px;align-items:center;font-size:12px;padding:7px 10px;background:var(--panel2);border-radius:7px}
+.sd-list .t{font-family:var(--mono);color:var(--muted);font-size:11px;width:40px}.sd-list .r{margin-left:auto}
+.sd-steps{display:flex;gap:4px;font-size:11px}.sd-steps span{flex:1;text-align:center;padding:7px 2px;border-radius:7px;background:var(--panel2);color:var(--muted)}
+.sd-steps span.on{background:#10222D;color:#CFEFFF;border:1px solid #2E5C75;font-weight:600}
+.sd-stack{height:12px;border-radius:6px;background:#26323A;overflow:hidden;display:flex}.sd-stack i{display:block;height:100%}
+.sd-hours{display:flex;gap:6px;align-items:flex-end;height:64px}.sd-hours>div{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:2px}
+.sd-hours i{display:block;width:100%;border-radius:3px 3px 0 0}.sd-hours span{font-size:10px;color:var(--muted);font-family:var(--mono)}
+.sd-heat{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;width:120px;flex:none}.sd-heat i{height:26px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:10px;font-style:normal;color:#0E1317;font-weight:700}
+.sd-strip{display:grid;grid-template-columns:repeat(15,1fr);gap:3px}.sd-strip i{height:16px;border-radius:3px}
+.sd-health{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted);padding:8px 12px;border-radius:9px;border:1px dashed var(--line2)}
+.sd-health .hs{font-weight:700}
+.sd-btns{display:flex;gap:8px;margin-top:auto}.sd-btns .btn{flex:1;min-height:42px;padding:0 8px;font-size:13px}
+.btn.estop{background:#C93835;border-color:#F0605D;color:#fff}
+.sd-chk{display:flex;gap:6px}.sd-chk span{flex:1;text-align:center;padding:8px 4px;border-radius:9px;font-size:13px;background:var(--panel2);border:1px solid var(--line);color:var(--muted)}
+.sd-chk span.on{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--ok-tx);font-weight:600}
+
+/* 오른쪽 메뉴: 왼쪽 트윈과 같은 높이 · 메뉴 안에서만 스크롤 (페이지 전체가 같이 내려가지 않게) */
+.twin>.panel{position:sticky;top:12px;height:max(560px,calc(100vh - 170px));overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#33424C transparent}
+.twin>.panel::-webkit-scrollbar{width:8px}.twin>.panel::-webkit-scrollbar-thumb{background:#33424C;border-radius:4px}
+@media (max-width:1200px){.twin>.panel{position:relative;height:auto;overflow:visible}}
+
+/* 새 흐름 (FLOW_V2): 상자 번호 */
+.tw-pid{font:700 10px var(--mono);fill:#BFE8FF;text-anchor:middle;paint-order:stroke;stroke:#0E1317;stroke-width:3px;pointer-events:none}
+.tw-pid.ng{fill:#FFB3B0}.tw-pid.wait{fill:#FFD58A}
+.flow-chip{position:absolute;left:50%;top:14px;transform:translateX(-50%);z-index:3;font-size:12.5px;font-weight:700;padding:5px 12px;border-radius:999px;border:1px solid var(--line2);background:rgba(21,28,33,.92);white-space:nowrap}
+.flow-chip.stop{color:#FFB3B0;border-color:#8E2F2D;background:rgba(42,18,19,.95)}.flow-chip.ff{color:#FFD58A;border-color:#C98A1B;background:rgba(42,30,5,.95)}
+.flow-chip.queue{color:#FFD58A;border-color:#8A6A2A;background:rgba(43,34,16,.95)}.flow-chip.ok{color:#7FE3C8;border-color:#2A6B5C}
+
+/* 10/07 검사기 정지 방식: 비전 검사기 위 카운트다운 · 판정 */
+.tw-station{font:700 12px var(--mono, monospace);fill:#BFE8FF;text-anchor:start;paint-order:stroke;stroke:#0E1317;stroke-width:4px;pointer-events:none}
+.tw-station.ng{fill:#FFB3B0}.tw-station.ok{fill:#7FE3C8}
+.tw-pid.st{fill:#BFE8FF}
+/* 10/07 디자인 고도화: 설비가 멈추면 몸체를 어둡게 (상태등 · 상자 · 이름표는 그대로) */
+.eq.stop polygon{filter:saturate(.35) brightness(.72)}
+.eq.stop .stk polygon,.eq.stop .tw-prod polygon,.eq.stop .tw-prod-x polygon{filter:none}
+.mech,.place{cursor:pointer}
+#tw-mech,#gt-person{pointer-events:auto}
+.chipU{font-size:11px;font-weight:700;border-radius:999px;padding:1px 8px;flex:none}
+.chipU.u-r{background:#2A1213;color:#FFB3B0;border:1px solid #8E2F2D}.chipU.u-y{background:#2B2210;color:#FFD58A;border:1px solid #8A6A2A}.chipU.u-b{background:#0F2633;color:#A8E2FF;border:1px solid #2A6B8E}
+
+/* 10/08 정비원 이동: 통로 표시 · 이동 경로 · 머리 위 상태표 */
+.mech-aisle polygon{fill:#4CC3FF;fill-opacity:.05;stroke:#4CC3FF;stroke-opacity:.28;stroke-width:1.2;stroke-dasharray:6 6;pointer-events:none}
+.mech-route{pointer-events:none}
+.mech-route polyline{fill:none;stroke:#2EE6A6;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:10 8;opacity:.85;animation:mechDash 1s linear infinite}
+.mech-route ellipse{fill:#2EE6A6;fill-opacity:.12;stroke:#7FE3C8;stroke-width:2}
+.mech-route.done polyline{opacity:.25;animation:none}
+@keyframes mechDash{to{stroke-dashoffset:-18}}
+.mech-tag{pointer-events:none}
+.mech-tag rect{fill:#0E1317;fill-opacity:.88;stroke:#4CC3FF;stroke-width:1.5}
+.mech-tag text{font:700 13px var(--sans, sans-serif);fill:#BFE8FF}
+.mech-tag.arrived rect{stroke:#2EE6A6}.mech-tag.arrived text{fill:#7FE3C8}
