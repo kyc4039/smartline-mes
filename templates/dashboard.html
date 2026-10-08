@@ -1,0 +1,347 @@
+{% extends "base.html" %}
+{% block head %}
+<script src="/static/flow.js"></script><script>window.FLOW_ON = {{ flow_v2|tojson }}; if (FLOW_ON) FLOW.start();</script>
+<script src="/static/line.js" defer></script>
+<script src="/static/incident.js"></script>
+<style>
+/* 관제 대시보드 — 핵심만: ① 사건 배너 ② 핵심 숫자 6 ③ 공정 라인 ④ 지금 할 일 ⑤ 오늘 설비 상태 ⑥ 카메라 */
+.k6{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
+.dk{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:5px;text-decoration:none;color:var(--text);min-width:0}
+.dk:hover{border-color:var(--data)}
+.dk.bad{border-color:var(--bad-bd)}.dk.warn{border-color:var(--warn-bd)}
+.dk .top{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted)}
+.dk .top span:last-child{font-size:11px}
+.dk .v{font-family:var(--mono);font-size:26px;font-weight:600;line-height:1.2;white-space:nowrap}.dk .v small{font-size:13px;font-family:'IBM Plex Sans KR',sans-serif;color:var(--muted);font-weight:500}
+.dk .d{font-size:11px;color:var(--muted)}
+.dk .bar{height:6px}
+.dk svg{display:block}
+.flow-chip2{font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;border:1px solid var(--line2);margin-left:6px}
+.flow-chip2.stop{color:#FFB3B0;border-color:#8E2F2D;background:#2A1213}.flow-chip2.ff{color:#FFD58A;border-color:#C98A1B;background:#2A1E05}
+.flow-chip2.queue{color:#FFD58A;border-color:#8A6A2A;background:#2B2210}.flow-chip2.ok{color:#7FE3C8;border-color:#2A6B5C;background:#12302A}
+#lnSvg .ln-pid{font:700 10px var(--mono);fill:#BFE8FF;text-anchor:middle;paint-order:stroke;stroke:#0E1317;stroke-width:3px;pointer-events:none}
+#lnSvg .ln-pid.ng{fill:#FFB3B0}#lnSvg .ln-pid.wait{fill:#FFD58A}#lnSvg .ln-pid.st{fill:#4CC3FF}
+#lnSvg .zone{fill:none;stroke:#55646E;stroke-width:2;stroke-dasharray:7 5}
+#lnSvg .zone.on{fill:rgba(240,96,93,.07);stroke:#F0605D}
+#lnSvg .zone.warn{fill:rgba(245,181,68,.06);stroke:#F5B544}
+#lnSvg .l.off{fill:#2B363E}#lnSvg .l.r{fill:#F0605D}#lnSvg .l.y{fill:#F5B544}#lnSvg .l.g{fill:#3CC6A8}
+.chips6{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+.stc{border-radius:10px;padding:8px 12px;background:var(--panel2);border:1px solid var(--line);font-size:12px;display:flex;flex-direction:column;gap:2px;min-width:0;text-decoration:none;color:var(--text)}
+.stc b{font-size:13px}.stc .m{font-family:var(--mono);color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stc.bad{background:var(--bad-bg);border-color:var(--bad-bd)}.stc.bad b{color:var(--bad-tx)}
+.stc.warn{background:var(--warn-bg);border-color:var(--warn-bd)}.stc.warn b{color:var(--warn-tx)}
+.stc.ok b{color:var(--ok-tx)}
+.r3{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(260px,320px);gap:16px;align-items:stretch}
+.cams3{display:flex;flex-direction:column;gap:10px}.cams3 .cam{aspect-ratio:16/10}
+.incl{display:flex;flex-direction:column;gap:6px}
+.incl div{display:flex;gap:10px;align-items:center;font-size:12px;padding:7px 10px;background:var(--panel2);border-radius:8px;min-width:0}
+.incl .no{font-family:var(--mono);color:var(--muted);font-size:11px;flex:none}.incl .tm2{font-family:var(--mono);color:var(--muted);font-size:11px;flex:none}
+.incl .ch{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.incl .du{font-family:var(--mono);font-size:11px;flex:none}
+.act{display:flex;flex-direction:column;gap:8px}
+.ac{display:flex;gap:12px;align-items:center;padding:10px 12px;border-radius:10px;background:var(--panel2);border:1px solid var(--line);border-left:4px solid var(--line2);text-decoration:none;color:var(--text)}
+.ac:hover{border-color:var(--data)}
+.ac.r{border-left-color:var(--bad)}.ac.y{border-left-color:var(--warn)}.ac.b{border-left-color:#4CC3FF}
+.ac .ico{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;flex:none}
+.ac.r .ico{background:var(--bad-bg);color:var(--bad)}.ac.y .ico{background:var(--warn-bg);color:var(--warn)}.ac.b .ico{background:#10222D;color:#4CC3FF}
+.ac .t{font-size:13px;font-weight:600}.ac .s{font-size:11px;color:var(--muted)}
+.ac .go{margin-left:auto;font-size:12px;color:#7FD4FF;white-space:nowrap}
+.ac .tmr{font-family:var(--mono);font-size:12px;color:var(--bad-tx);white-space:nowrap}
+.bands{display:grid;grid-template-columns:90px minmax(0,1fr) 46px 40px;gap:8px 10px;font-size:12px;align-items:center}
+.bands .pc{font-family:var(--mono);font-size:12px;text-align:right}.bands .sc{font-size:11px;color:var(--muted);text-align:right}
+.bands .hd2{font-size:10px;color:var(--muted);text-align:right}
+.bands .rl{color:var(--muted)}
+.bands .tr{position:relative;height:20px;background:#12302A;border-radius:4px;overflow:hidden}
+.bands .tr i{position:absolute;top:0;bottom:0;min-width:2px}
+.bands .ax{display:flex;justify-content:space-between;color:var(--muted);font-size:10px;font-family:var(--mono)}
+
+.leg{display:flex;gap:12px;font-size:11px;color:var(--muted);flex-wrap:wrap;align-items:center}.leg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+@media (max-width:1200px){.k6,.chips6{grid-template-columns:repeat(3,minmax(0,1fr))}.r3{grid-template-columns:minmax(0,1fr)}}
+</style>
+{% endblock %}
+{% block body %}
+<!-- ① 사건 배너 (진행 중인 사건이 있을 때만) -->
+<div id="incidentBox"></div>
+
+<!-- ② 핵심 숫자 6 (누르면 해당 페이지) -->
+<div class="k6">
+  <a class="dk" id="dOee" href="/oee"><div class="top"><span>OEE · 이번 교대</span><span>OEE →</span></div><div class="v" id="vOee">-</div><div class="bar"><i id="bOee" style="width:0"></i></div><div class="d" id="sOee"></div></a>
+  <a class="dk" id="dProd" href="/production"><div class="top"><span>생산 · 계획 대비</span><span>생산 →</span></div><div class="v" id="vProd">-</div><div class="bar"><i id="bProd" style="width:0"></i></div><div class="d" id="sProd"></div></a>
+  <a class="dk" id="dQ" href="/quality"><div class="top"><span>불량률 · 최근 50개</span><span>품질 →</span></div><div class="v" id="vQ">-</div><svg id="spQ" width="100%" height="22" viewBox="0 0 160 22" preserveAspectRatio="none"></svg><div class="d" id="sQ"></div></a>
+  <a class="dk" id="dS" href="/safety"><div class="top"><span>안전 · 오늘</span><span>안전 →</span></div><div class="v" id="vS">-</div><div class="d" id="sS"></div></a>
+  <a class="dk" id="dM" href="/maintenance"><div class="top"><span>정비 · 처리 대기</span><span>보전 →</span></div><div class="v" id="vM">-</div><div class="ub" id="uM" style="display:flex;gap:4px;flex-wrap:wrap"></div><div class="d" id="sM"></div></a>
+  <a class="dk" id="dT" href="/production"><div class="top"><span>출하 · 오늘</span><span>생산 →</span></div><div class="v" id="vT">-</div><div class="d" id="sT"></div></a>
+</div>
+
+<!-- ③ 공정 라인 (디지털 트윈과 같은 흐름 · 같은 장부 · 검사기 {{ inspect_sec }}초 정지) -->
+<section class="panel" aria-label="공정 라인">
+  <div class="row"><h2>공정 라인 <span class="small muted">· 디지털 트윈과 같은 장부 (검사 기록 1개 = 상자 1개)</span> <span class="tg y" id="simTag" hidden>시뮬레이션 데이터</span></h2> <span class="flow-chip2" id="flowChip" hidden></span>
+    <span class="leg"><span><i style="background:#3CC6A8"></i>가동</span><span><i style="background:#F5B544"></i>연동 정지 · 대기</span><span><i style="background:#F0605D"></i>정지</span><a href="/twin" style="font-size:12px">디지털 트윈 →</a></span></div>
+  <svg id="lnSvg" viewBox="0 38 1400 310" width="100%" style="display:block" font-family="IBM Plex Sans KR, sans-serif" role="img" aria-label="공정 라인 애니메이션">
+  <defs>
+    <linearGradient id="gMetal" x1="0" x2="1"><stop offset="0" stop-color="#55646E"/><stop offset=".5" stop-color="#7A8992"/><stop offset="1" stop-color="#4A5862"/></linearGradient>
+    <linearGradient id="gDark" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#3E4C56"/><stop offset="1" stop-color="#28333B"/></linearGradient>
+    <linearGradient id="gBox" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#F7C25A"/><stop offset="1" stop-color="#D9982C"/></linearGradient>
+    <linearGradient id="gBad" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#F57A77"/><stop offset="1" stop-color="#C93835"/></linearGradient>
+    <linearGradient id="gYel" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#FFCB5C"/><stop offset="1" stop-color="#E09E22"/></linearGradient>
+    <linearGradient id="gTruck" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#E4E9EC"/><stop offset="1" stop-color="#B7C1C7"/></linearGradient>
+    <linearGradient id="gCab" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#3FA6DB"/><stop offset="1" stop-color="#22709A"/></linearGradient>
+    <linearGradient id="gBeam" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#4CC3FF" stop-opacity=".45"/><stop offset="1" stop-color="#4CC3FF" stop-opacity=".05"/></linearGradient>
+    <linearGradient id="gBeamR" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#F0605D" stop-opacity=".5"/><stop offset="1" stop-color="#F0605D" stop-opacity=".06"/></linearGradient>
+    <linearGradient id="gWood" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#A57A4E"/><stop offset="1" stop-color="#7A5A3A"/></linearGradient>
+    <pattern id="hz" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="12" fill="#F5B544"/><rect x="6" width="6" height="12" fill="#1B242A"/></pattern>
+    <linearGradient id="gChar" x1="0" x2="1"><stop offset="0" stop-color="#3A4146"/><stop offset=".5" stop-color="#4A5258"/><stop offset="1" stop-color="#30363A"/></linearGradient>
+    <linearGradient id="gPre" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#B0A084"/><stop offset="1" stop-color="#857760"/></linearGradient>
+    <g id="boxPre"><rect width="22" height="18" rx="2" fill="url(#gPre)"/><rect width="22" height="4" rx="2" fill="#C9BBA0" opacity=".5"/><line x1="11" y1="0" x2="11" y2="18" stroke="#6E624E" stroke-width="1"/></g>
+    <g id="box"><rect width="22" height="18" rx="2" fill="url(#gBox)"/><rect width="22" height="4" rx="2" fill="#FFD98A" opacity=".55"/><line x1="11" y1="0" x2="11" y2="18" stroke="#B57C1E" stroke-width="1"/></g>
+    <g id="wheel"><circle r="9" fill="#11171B" stroke="#55646E" stroke-width="2"/><circle r="3.5" fill="#7A8992"/></g>
+  </defs>
+  <rect x="0" y="292" width="1400" height="3" fill="#1B242A"/>
+  <!-- ① 자재 선반 · AMR -->
+  <rect x="12" y="132" width="5" height="160" fill="url(#gChar)"/><rect x="73" y="132" width="5" height="160" fill="url(#gChar)"/>
+  <rect x="12" y="170" width="66" height="5" fill="#F5C542"/><rect x="12" y="214" width="66" height="5" fill="#F5C542"/><rect x="12" y="258" width="66" height="5" fill="#F5C542"/>
+  <use href="#boxPre" x="20" y="152"/><use href="#boxPre" x="46" y="152"/><use href="#boxPre" x="20" y="196"/><use href="#boxPre" x="46" y="196"/><use href="#boxPre" x="33" y="240"/>
+  <text x="45" y="122" fill="#93A3AD" font-size="11" text-anchor="middle">자재 창고</text>
+  <g id="ln-amr" transform="translate(96 0)">
+    <rect x="0" y="244" width="92" height="34" rx="10" fill="url(#gChar)" stroke="#F5C542" stroke-width="1.5"/>
+    <rect x="0" y="262" width="92" height="6" fill="url(#hz)" opacity=".9"/>
+    <rect x="62" y="250" width="22" height="10" rx="2" fill="#0E1317"/><text x="73" y="258" fill="#4CC3FF" font-size="7" text-anchor="middle" font-family="IBM Plex Mono, monospace">AMR</text>
+    <rect x="6" y="238" width="80" height="6" rx="2" fill="#55646E"/>
+    <g id="ln-amr-cargo"><use href="#boxPre" x="14" y="220"/><use href="#boxPre" x="38" y="220"/></g>
+    <rect x="80" y="232" width="10" height="8" rx="2" fill="#2B363E"/><circle cx="85" cy="236" r="2" fill="#4CC3FF"/>
+    <use href="#wheel" x="20" y="280"/><use href="#wheel" x="72" y="280"/>
+    <g class="tw" data-eq="자재 투입기" transform="translate(8 176)"><rect x="-4" width="8" height="26" rx="2" fill="#2B363E"/><circle class="l off" cy="4" r="4"/><circle class="l off" cy="13" r="4"/><circle class="l g" cy="22" r="4"/><rect x="-1.5" y="26" width="3" height="14" fill="#55646E"/></g>
+  </g>
+  <!-- 컨베이어 -->
+  <rect x="200" y="260" width="22" height="22" rx="3" fill="url(#gDark)" stroke="#55646E"/><circle cx="211" cy="271" r="5" fill="#7A8992"/>
+  <rect x="216" y="250" width="610" height="12" rx="6" fill="#26323A" stroke="#3E4C56"/>
+  <rect x="216" y="246" width="610" height="4" rx="2" fill="url(#gChar)"/>
+  <line id="ln-beltdash" x1="222" y1="256" x2="822" y2="256" stroke="#3E4C56" stroke-width="2" stroke-dasharray="2 12"/>
+  <g fill="url(#gChar)"><rect x="240" y="262" width="5" height="30"/><rect x="420" y="262" width="5" height="30"/><rect x="600" y="262" width="5" height="30"/><rect x="800" y="262" width="5" height="30"/></g>
+  <rect x="236" y="286" width="572" height="4" fill="#33424C"/>
+  <text x="520" y="222" fill="#93A3AD" font-size="10" text-anchor="middle">→ {{ takt }}초에 1개</text>
+  <!-- ② 프레스 #1 -->
+  <rect id="ln-zone" class="zone" x="292" y="58" width="160" height="196" rx="6"/>
+  <text id="ln-zlbl" x="372" y="52" fill="#93A3AD" font-size="11" text-anchor="middle" font-weight="600">위험구역 감시 중</text>
+  <rect x="306" y="92" width="16" height="160" fill="url(#gChar)"/><rect x="422" y="92" width="16" height="160" fill="url(#gChar)"/>
+  <rect x="298" y="74" width="148" height="28" rx="4" fill="url(#gChar)" stroke="#55646E"/><rect x="298" y="96" width="148" height="5" fill="#F5C542"/>
+  <rect x="356" y="62" width="32" height="14" rx="3" fill="#4A5862"/>
+  <g id="ln-ram"><rect x="366" y="96" width="12" height="28" fill="#93A3AD"/><rect x="334" y="122" width="76" height="40" rx="3" fill="url(#gYel)"/><rect x="340" y="162" width="64" height="10" rx="2" fill="#C8D0D5"/></g>
+  <rect x="296" y="236" width="152" height="16" rx="3" fill="url(#gDark)" stroke="#55646E"/><rect x="338" y="226" width="68" height="10" rx="2" fill="#93A3AD"/>
+  <g stroke="#F0605D" stroke-width="1.2" opacity=".6"><line x1="328" y1="150" x2="416" y2="150"/><line x1="328" y1="170" x2="416" y2="170"/><line x1="328" y1="190" x2="416" y2="190"/><line x1="328" y1="210" x2="416" y2="210"/></g>
+  <rect x="324" y="140" width="4" height="84" fill="#2B363E"/><rect x="416" y="140" width="4" height="84" fill="#2B363E"/>
+  <g transform="translate(448 150)"><rect width="26" height="34" rx="3" fill="#2B363E" stroke="#55646E"/><circle cx="13" cy="10" r="5" fill="#F0605D"/><rect x="5" y="20" width="16" height="8" rx="1" fill="#0E1317"/></g>
+  <g class="tw" data-eq="프레스 #1" transform="translate(470 96)"><rect x="-4" width="8" height="26" rx="2" fill="#2B363E"/><circle class="l off" cy="4" r="4"/><circle class="l off" cy="13" r="4"/><circle class="l g" cy="22" r="4"/><rect x="-1.5" y="26" width="3" height="14" fill="#55646E"/></g>
+  <g id="ln-hand" transform="translate(386 192)" style="display:none"><circle cx="8" cy="8" r="11" fill="#F0605D" opacity=".25"/><path d="M3 18 Q1 6 8 3 Q15 6 13 18Z" fill="#F0B8A0"/></g>
+  <!-- 벨트 위 상자 (line.js가 움직임) -->
+  <g id="ln-prods"></g>
+  <!-- ③ 비전 검사기 -->
+  <rect x="610" y="96" width="10" height="152" fill="url(#gYel)"/><rect x="716" y="96" width="10" height="152" fill="url(#gYel)"/>
+  <rect x="604" y="88" width="128" height="14" rx="3" fill="url(#gChar)" stroke="#55646E"/>
+  <rect x="648" y="102" width="40" height="30" rx="5" fill="url(#gYel)" stroke="#B57C1E"/><circle cx="668" cy="134" r="8" fill="#0E1317" stroke="#4CC3FF" stroke-width="2"/><circle cx="668" cy="134" r="3" fill="#4CC3FF"/>
+  <rect x="626" y="104" width="16" height="6" rx="2" fill="#E7EDF0" opacity=".8"/><rect x="694" y="104" width="16" height="6" rx="2" fill="#E7EDF0" opacity=".8"/>
+  <path id="ln-beam" d="M660 142 L632 232 L704 232 L676 142Z" fill="url(#gBeam)"/>
+  <g transform="translate(736 120)"><rect width="46" height="34" rx="4" fill="#0E1317" stroke="#55646E"/><text x="23" y="15" fill="#93A3AD" font-size="8" text-anchor="middle">AI 판정</text><text id="ln-mon" x="23" y="28" fill="#7FE3C8" font-size="10" text-anchor="middle" font-weight="700">정상</text><rect x="21" y="34" width="4" height="10" fill="#55646E"/></g>
+  <g class="tw" data-eq="비전 검사기" transform="translate(726 54)"><rect x="-4" width="8" height="26" rx="2" fill="#2B363E"/><circle class="l off" cy="4" r="4"/><circle class="l off" cy="13" r="4"/><circle class="l g" cy="22" r="4"/><rect x="-1.5" y="26" width="3" height="14" fill="#55646E"/></g>
+  <!-- 불량 분기 -->
+  <rect x="700" y="238" width="18" height="10" rx="2" fill="#7A8992"/><rect x="690" y="240" width="12" height="6" fill="#4A5862"/>
+  <path d="M708 262 L742 300" stroke="#8E2F2D" stroke-width="12" stroke-linecap="round"/><path d="M708 262 L742 300" stroke="#C93835" stroke-width="4" stroke-linecap="round"/>
+  <path d="M730 296 L818 296 L812 344 L736 344Z" fill="#2A1213" stroke="#F0605D" stroke-width="1.5"/>
+  <rect x="740" y="300" width="68" height="10" fill="url(#hz)" opacity=".5"/>
+  <text x="774" y="290" fill="#FFB3B0" font-size="10" text-anchor="middle">불량함</text>
+  <text id="ln-bin" x="796" y="334" fill="#FFE1DF" font-size="13" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-weight="600">0</text>
+  <!-- ④ 로봇 적재기 -->
+  <rect x="842" y="262" width="60" height="30" rx="4" fill="url(#gDark)" stroke="#55646E"/>
+  <rect x="852" y="246" width="40" height="18" rx="6" fill="url(#gChar)"/>
+  <line id="ln-a1" stroke="#F5C542" stroke-width="14" stroke-linecap="round"/><line id="ln-a1b" stroke="#D9A92A" stroke-width="6" stroke-linecap="round"/>
+  <line id="ln-a2" stroke="#F5C542" stroke-width="11" stroke-linecap="round"/><line id="ln-a2b" stroke="#D9A92A" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="872" cy="248" r="10" fill="#3A4146" stroke="#F5C542" stroke-width="2"/>
+  <circle id="ln-j1" r="9" fill="#3A4146" stroke="#F5C542" stroke-width="2"/><circle id="ln-j2" r="7" fill="#3A4146" stroke="#F5C542" stroke-width="2"/>
+  <g id="ln-grip"><rect x="-4" y="6" width="8" height="18" fill="#7A8992"/><rect x="-12" y="22" width="24" height="5" rx="1" fill="#55646E"/>
+    <rect x="-11" y="26" width="3" height="10" fill="#55646E"/><rect x="8" y="26" width="3" height="10" fill="#55646E"/><use id="ln-cargo" href="#box" x="-11" y="34"/></g>
+  <g class="tw" data-eq="로봇 적재기" transform="translate(828 196)"><rect x="-4" width="8" height="26" rx="2" fill="#2B363E"/><circle class="l off" cy="4" r="4"/><circle class="l off" cy="13" r="4"/><circle class="l g" cy="22" r="4"/><rect x="-1.5" y="26" width="3" height="14" fill="#55646E"/></g>
+  <!-- 팔레트 -->
+  <rect x="936" y="272" width="96" height="6" rx="1" fill="url(#gWood)"/><rect x="936" y="284" width="96" height="6" rx="1" fill="url(#gWood)"/>
+  <rect x="940" y="276" width="10" height="10" fill="#5E4329"/><rect x="979" y="276" width="10" height="10" fill="#5E4329"/><rect x="1018" y="276" width="10" height="10" fill="#5E4329"/>
+  <g id="ln-pallet"></g>
+  <rect x="958" y="206" width="54" height="18" rx="9" fill="#2B2210" stroke="#8A6A2A"/><text id="ln-pfill" x="985" y="219" fill="#FFD58A" font-size="11" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-weight="600">0 / 8</text>
+  <!-- ⑤ 지게차 -->
+  <g id="ln-fork" transform="translate(1052 0)">
+    <rect x="58" y="176" width="5" height="104" fill="url(#gMetal)"/><rect x="66" y="176" width="5" height="104" fill="url(#gMetal)"/>
+    <rect x="62" y="272" width="34" height="5" rx="1" fill="#93A3AD"/>
+    <g id="ln-fork-load" style="display:none"><rect x="64" y="266" width="32" height="6" fill="url(#gWood)"/><use href="#box" x="64" y="248"/><use href="#box" x="74" y="230"/></g>
+    <path d="M6 236 L50 236 L58 250 L58 282 L2 282 L2 244Z" fill="url(#gYel)" stroke="#B57C1E"/>
+    <rect x="0" y="252" width="14" height="24" rx="3" fill="#2B363E"/>
+    <path d="M10 236 L14 196 L50 196 L54 236" fill="none" stroke="#2B363E" stroke-width="4"/>
+    <rect x="22" y="220" width="16" height="16" rx="3" fill="#2B363E"/><circle cx="44" cy="246" r="3" fill="#F0605D"/>
+    <use href="#wheel" x="16" y="284"/><use href="#wheel" x="48" y="284"/>
+  </g>
+  <!-- ⑥ 트럭 -->
+  <g id="ln-truck"><g transform="translate(1160 0)">
+    <rect x="0" y="150" width="170" height="122" rx="4" fill="url(#gTruck)" stroke="#93A3AD"/>
+    <rect x="6" y="156" width="70" height="110" rx="2" fill="#1B242A"/>
+    <rect x="6" y="264" width="70" height="3" fill="#7A5A3A"/>
+    <line x1="76" y1="156" x2="76" y2="266" stroke="#93A3AD"/>
+    <g fill="#B7C1C7"><rect x="84" y="164" width="78" height="2"/><rect x="84" y="196" width="78" height="2"/><rect x="84" y="228" width="78" height="2"/></g>
+    <text x="123" y="186" fill="#55646E" font-size="12" text-anchor="middle" font-weight="700">SMART LINE</text>
+    <path d="M170 196 L206 196 L226 226 L226 272 L170 272Z" fill="url(#gCab)" stroke="#1C5F82"/>
+    <path d="M178 202 L202 202 L216 224 L178 224Z" fill="#BFE6FA" opacity=".85"/>
+    <rect x="216" y="252" width="10" height="6" rx="1" fill="#FFD58A"/>
+    <rect x="0" y="272" width="226" height="8" rx="2" fill="#2B363E"/>
+    <use href="#wheel" x="30" y="284"/><use href="#wheel" x="56" y="284"/><use href="#wheel" x="198" y="284"/>
+    <rect x="94" y="128" width="58" height="18" rx="9" fill="#10222D" stroke="#2E5C75"/><text id="ln-tnum" x="123" y="141" fill="#CFEFFF" font-size="11" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-weight="600">0 / 10</text>
+  </g><g id="ln-tcargo"></g></g>
+  <g fill="#93A3AD" font-size="11" text-anchor="middle"><text x="140" y="314">① 투입</text><text x="372" y="314">② 프레스</text><text x="668" y="314">③ 검사</text><text x="872" y="314">④ 적재</text><text x="1086" y="314">⑤ 지게차</text><text x="1272" y="314">⑥ 출하</text></g>
+</svg>
+  <div class="chips6" id="chips"></div>
+</section>
+
+<div class="r3">
+  <!-- ④ 지금 할 일 -->
+  <section class="panel" aria-label="지금 할 일">
+    <div class="row"><h2>지금 할 일</h2><span class="small muted" id="actN">급한 순서 · 누르면 해당 페이지</span></div>
+    <div class="act" id="acts"></div>
+  </section>
+  <!-- ⑤ 오늘 설비 상태 + 오늘 사건 -->
+  <section class="panel" aria-label="오늘 설비 상태">
+    <div class="row"><h2>오늘 설비 상태 <span class="small muted" id="bandLbl"></span></h2><span class="leg"><span><i style="background:#F0605D"></i>정지</span><span><i style="background:#F5B544"></i>연동</span></span></div>
+    <div class="bands" id="bands"></div>
+    <div class="small muted" id="bandNote"></div>
+    <div class="row" style="margin-top:4px"><h2 style="font-size:14px">오늘 사건 <span class="small muted">최근 순 · 원인 → 정지 → 복구</span></h2><a class="small" href="/timeline">전체 →</a></div>
+    <div class="incl" id="incList"></div>
+  </section>
+  <!-- ⑥ 라이브 카메라 (세로 3칸) -->
+  <section class="panel" aria-label="라이브 카메라">
+    <div class="row"><h2>라이브 카메라</h2><span class="small muted">이상 = 빨간 테두리</span></div>
+    <div class="cams3">
+      <div class="cam" id="cam-gate"><img src="/gate/video" alt="안전 게이트 카메라"><span class="lb">CAM 1 · 안전 게이트</span><span class="st"></span></div>
+      <a class="cam" id="cam-quality" href="/quality"><img src="/quality/video" alt="품질 검사 카메라"><span class="lb">CAM 2 · 품질 검사</span><span class="st"></span></a>
+      <a class="cam" id="cam-safety" href="/safety"><img src="/safety/video" alt="프레스 금형부 카메라"><span class="lb">CAM 3 · 프레스 금형부</span><span class="st"></span></a>
+    </div>
+  </section>
+</div>
+
+<script>
+const LINE_EQ = ["자재 투입기", "프레스 #1", "컨베이어", "비전 검사기", "로봇 적재기"];
+// 라인 아래 칸을 누르면 디지털 트윈에서 그 설비 메뉴가 열림 (설비마다 상세 · 정비 요청 · 해당 페이지 버튼이 모여 있음)
+const LINK = Object.fromEntries(["자재 투입기", "프레스 #1", "컨베이어", "비전 검사기", "로봇 적재기", "출하장"].map(n => [n, "/twin?eq=" + encodeURIComponent(n)]));
+let SUM = null, ST = null;
+const n0 = v => v == null ? "-" : Math.round(v).toLocaleString();
+const dur = s => s == null ? "-" : s < 60 ? `${Math.round(s)}초` : s < 3600 ? `${Math.round(s / 60)}분` : `${Math.floor(s / 3600)}시간 ${Math.round(s % 3600 / 60)}분`;
+
+// ---------- 1초마다 (/api/state): 설비 상태 · 카메라 · 공정 라인 상태등 ----------
+function render(d) {
+  ST = d;
+  if (typeof LINE !== "undefined") LINE.state(d);
+  const m = d.modules;
+  const badge = (key, s) => { const el = document.querySelector(`#cam-${key} .st`); if (el) { el.className = "st badge t-" + tone(s); el.textContent = s || "-"; } };
+  badge("gate", (m.gate || {}).status); badge("quality", (m.quality || {}).status); badge("safety", (m.safety || {}).status);
+  document.getElementById("cam-safety").classList.toggle("alarm", (m.safety || {}).status === "안전 정지");
+  document.getElementById("cam-quality").classList.toggle("alarm", (m.quality || {}).status === "불량");
+  drawChips();
+}
+
+// 공정 라인 아래 설비 칸 (상태 + 한 줄 숫자)
+function drawChips() {
+  if (!ST) return;
+  const eq = Object.fromEntries(ST.equipment.map(e => [e.name, e]));
+  const S = {...((SUM && SUM.stations) || {})}, p = SUM && SUM.prod;
+  const C = typeof LINE !== "undefined" ? LINE.counts() : null;          // 그림에 보이는 팔레트 · 트럭 숫자와 맞춤
+  if (C) S["로봇 적재기"] = `팔레트 ${C.fill}/${C.size}`;
+  const cv = eq["컨베이어"] || {};
+  S["컨베이어"] = cv.status && cv.status !== "가동" ? "" : "{{ takt }}초에 1개";             // 멈췄을 때는 아래에서 이유를 보여 줌
+  const cells = LINE_EQ.map(n => {
+    const e = eq[n] || {status: "-"}, t = tone(e.status);
+    const sub = [e.status, e.status !== "가동" ? e.reason : "", S[n]].filter(Boolean).join(" · ");
+    return `<a class="stc ${t === "idle" ? "" : t}" href="${LINK[n]}" title="${esc(sub)}"><b>${shape(e.status)} ${esc(n)}</b><span class="m">${esc(sub)}</span></a>`;
+  });
+  const FC = window.FLOW_ON && FLOW.ready() ? FLOW.counts() : null;
+  cells.push(p ? `<a class="stc ok" href="${LINK["출하장"]}"><b>● 출하</b><span class="m">LOT ${esc((FC ? FC.lot : p.lot).slice(-2))} · ${C ? C.onTruck : p.pallets}/${p.truck_pallets} 팔레트 · ≈${dur(p.eta)}</span></a>` : `<div class="stc"><b>출하</b><span class="m">-</span></div>`);
+  chips.innerHTML = cells.join("");
+}
+
+// ---------- 5초마다 (/api/dashboard): 핵심 숫자 · 지금 할 일 · 상태 띠 ----------
+function loadSum() { fetch("/api/dashboard/summary").then(r => r.json()).then(d => { SUM = d; drawSum(d); if (typeof LINE !== "undefined") LINE.data(d); }).catch(() => {}); }
+function drawSum(d) {
+  const o = d.oee, p = d.prod, q = d.quality, s = d.safety, mt = d.maint;
+  // OEE
+  vOee.innerHTML = o.oee == null ? "-" : `${(o.oee * 100).toFixed(1)}<small>%</small>`;
+  bOee.style.width = ((o.oee || 0) * 100) + "%"; bOee.style.background = o.oee != null && o.oee >= o.target ? "var(--ok)" : "var(--data)";
+  sOee.textContent = o.oee == null ? "검사 기록이 쌓이면 계산" : (o.oee >= o.target ? "목표 달성 ✓" : `목표 ${Math.round(o.target * 100)}%까지 ${((o.target - o.oee) * 100).toFixed(1)}%p`) + (o.low ? ` · ${o.low}이 가장 낮음` : "");
+  dOee.className = "dk" + (o.oee != null && o.oee < o.target - 0.15 ? " warn" : "");
+  // 생산
+  if (p) {
+    vProd.innerHTML = `${n0(p.done)}<small> / ${n0(p.target)}</small>`;
+    const gap = p.target ? p.forecast / p.target - 1 : 0;
+    bProd.style.width = Math.min(100, p.target ? p.done / p.target * 100 : 0) + "%"; bProd.style.background = gap < -0.05 ? "var(--warn)" : "var(--ok)";
+    sProd.innerHTML = `지금 속도면 마감 ${n0(p.forecast)}개 · <span class="${gap < -0.05 ? "c-warn" : "c-ok"}">${gap >= 0 ? "+" : ""}${Math.round(gap * 100)}%</span>`;
+    dProd.className = "dk" + (gap < -0.05 ? " warn" : "");
+    vT.innerHTML = `${window.FLOW_ON && FLOW.ready() ? FLOW.counts().trucks_out : p.trucks}<small>대</small>`;
+    const fc = window.FLOW_ON && FLOW.ready() ? FLOW.counts() : null;     // 새 흐름: 라인 그림 · 트윈 · 생산 관리와 같은 장부 숫자
+    sT.textContent = fc ? `LOT ${fc.lot.slice(-2)} 적재 ${fc.onTruck}/${p.truck_pallets} 팔레트` + (fc.departing ? " · 출발 중" : ` · 출발 ≈ ${dur(p.eta)}`)
+                        : `LOT ${p.lot.slice(-2)} 적재 ${p.pallets}/${p.truck_pallets} 팔레트 · 출발 ≈ ${dur(p.eta)}`;
+    simTag.hidden = !p.sim;
+  }
+  // 품질
+  vQ.innerHTML = q.rate50 == null ? "-" : `${(q.rate50 * 100).toFixed(1)}<small>%</small>`;
+  vQ.className = "v " + (q.out ? "c-bad" : q.rate50 > q.limit ? "c-warn" : "");
+  const sp = q.spark, mx = Math.max(q.ucl || 0.06, ...sp, 0.01);
+  const yy = v => (20 - v / mx * 18).toFixed(1);
+  spQ.innerHTML = (q.ucl ? `<line x1="0" x2="160" y1="${yy(q.ucl)}" y2="${yy(q.ucl)}" stroke="#F0605D" stroke-dasharray="3 3"/>` : "") +
+    (sp.length > 1 ? `<polyline fill="none" stroke="#4CC3FF" stroke-width="2" points="${sp.map((v, i) => `${(i / (sp.length - 1) * 160).toFixed(1)},${yy(v)}`).join(" ")}"/>` : "");
+  sQ.textContent = (q.out ? "▲ 관리 한계 이탈" : "관리 한계 안") + (q.pending ? ` · 확인 대기 ${q.pending}건` : "");
+  dQ.className = "dk" + (q.out ? " bad" : q.pending ? " warn" : "");
+  // 안전
+  if (s) {
+    vS.innerHTML = `${s.stops}<small>회 정지</small>`; vS.className = "v " + (s.stops ? "c-bad" : "c-ok");
+    sS.textContent = `경고 접근 ${s.warns}회 · 무재해 ${s.safe_days}일 · 점검 ${s.check_done}/${s.check_total}`;
+    dS.className = "dk" + (s.lock ? " warn" : "");
+  }
+  // 정비
+  if (mt) {
+    vM.innerHTML = `${mt.open}<small>건</small>`;
+    uM.innerHTML = [["상", "r", "즉시"], ["중", "y", "당일"], ["하", "b", "정기"]].map(([u, c, n]) => `<span class="tg ${c}">${n} ${mt.open_by[u]}</span>`).join("");
+    sM.innerHTML = (mt.overdue ? `<span class="c-bad">기한 초과 ${mt.overdue}</span> · ` : "") + (mt.worst ? `${esc(mt.worst.name)} 건강 ${mt.worst.score}점` : "");
+    dM.className = "dk" + (mt.open_by["상"] ? " bad" : mt.open ? " warn" : "");
+  }
+  // 지금 할 일
+  actN.textContent = d.actions_n > d.actions.length ? `급한 순서 · ${d.actions.length} / ${d.actions_n}건` : "급한 순서 · 누르면 해당 페이지";
+  acts.innerHTML = d.actions.map(a => `<a class="ac ${a.lv}" href="${a.link}"><div class="ico">${a.icon}</div>
+      <div style="min-width:0"><div class="t">${esc(a.title)}</div><div class="s">${esc(a.sub || "")}</div></div>
+      ${a.left != null ? `<span class="tmr">⏱ ${a.left < 0 ? "기한 초과" : dur(a.left)}</span>` : ""}<span class="go">${a.go} →</span></a>`).join("")
+    || '<div class="empty">지금 처리할 일이 없어요 👍</div>';
+  // 오늘 설비 상태 띠
+  const B = d.bands, span = Math.max(1, B.cur - B.start);
+  bandLbl.textContent = `(${hm(B.start)} ~ 지금)`;
+  const col = st => st === "연동 정지" ? "#F5B544" : "#F0605D";
+  bands.innerHTML = `<span></span><span></span><span class="hd2">가동률</span><span class="hd2">정지</span>` + B.rows.map(r => {
+      const down = r.segs.reduce((a, g) => a + (g.e - g.s), 0), run = 1 - down / span, n = r.segs.filter(g => g.st !== "연동 정지").length;
+      return `<span class="rl">${esc(r.name)}</span><div class="tr">${r.segs.map(g =>
+        `<i style="left:${((g.s - B.start) / span * 100).toFixed(2)}%;width:${((g.e - g.s) / span * 100).toFixed(2)}%;background:${col(g.st)}" title="${esc(r.name)} ${esc(g.st)} ${hm(g.s)} · ${dur(g.e - g.s)}"></i>`).join("")}</div>
+        <span class="pc ${run < 0.85 ? "c-warn" : "c-ok"}">${Math.round(run * 100)}%</span><span class="sc">${n ? n + "회" : "-"}</span>`; }).join("") +
+    `<span></span><div class="ax">${[0, .25, .5, .75].map(f => `<span>${hm(B.start + span * f)}</span>`).join("")}<span>지금</span></div><span></span><span></span>`;
+  bandNote.innerHTML = `오늘 안전 · 고장 정지 ${B.stops}건` + (B.longest ? ` · 가장 긴 정지 ${esc(B.longest.name)} ${dur(B.longest.sec)}` : "") + ` · <a href="/timeline">타임라인 →</a>`;
+  drawChips();
+}
+
+// ---------- 2초마다 (/api/incidents): 사건 배너 ----------
+function loadInc() {
+  fetch("/api/incidents").then(r => r.json()).then(d => {
+    // 오늘 사건 목록 (진행 중 + 최근 끝난 것)
+    const L = [...(d.active || []), ...(d.recent || [])].slice(0, 6);
+    incList.innerHTML = L.map(i => { const c = i.steps.find(s => s.kind === "cause"), l = i.steps.find(s => s.kind === "linked");
+      const dd = (i.end || Date.now() / 1000) - i.start;
+      return `<div><span class="no">#${String(i.no).padStart(4, "0")}</span><span class="tm2">${time(i.start).slice(0, 5)}</span>
+        <span class="ch">${c ? esc(c.title) + " → " : ""}<span class="c-bad">${esc(i.equipment)} ${esc(i.status)}</span>${l ? ' → <span class="c-warn">연동 정지</span>' : ""} → ${i.end ? '<span class="c-ok">' + esc(i.recovery || "재가동") + "</span>" : '<b class="c-bad">진행 중</b>'}</span>
+        <span class="du">${String(Math.floor(dd / 60)).padStart(2, "0")}:${String(Math.floor(dd % 60)).padStart(2, "0")}</span></div>`; }).join("")
+      || '<div class="muted">오늘 사건 없음 👍</div>';
+  }).catch(() => {});
+}
+loadSum(); setInterval(loadSum, 5000);
+loadInc(); setInterval(loadInc, 3000);
+INC.start();
+poll(s => { render(s); INC.update(s); });
+setInterval(() => {                                  // 새 흐름 상태 한 줄 (정지 · 적체 · 빨리감기 · 평소)
+  const st = window.FLOW_ON && FLOW.ready() ? FLOW.status() : null;
+  flowChip.hidden = !st; if (st) { flowChip.className = "flow-chip2 " + st.kind; flowChip.textContent = st.text; }
+}, 500);
+</script>
+{% endblock %}
