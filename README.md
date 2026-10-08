@@ -44,9 +44,17 @@ uv --version
 
 ### 2. 코드 내려받기
 
+먼저 코드를 저장할 폴더를 정하고(예: `D:\projects`, `문서` 폴더 등) 터미널에서 그 폴더로 이동합니다.
+
+```bash
+cd 저장할_폴더_경로
+```
+예) 윈도우 `cd D:\projects` · 맥 `cd ~/Documents`
+
+> **폴더 경로 쉽게 넣는 법**: `cd ` (cd와 띄어쓰기)까지 입력한 뒤, 탐색기(맥은 Finder)에서 그 폴더를 터미널 창으로 **끌어다 놓으면** 경로가 자동으로 입력됩니다.
+
 **방법 A — git이 있으면** (`git --version`이 나오면 있는 것)
 ```bash
-cd ~/Desktop
 git clone https://github.com/kyc4039/smartline-mes.git
 cd smartline-mes
 ```
@@ -54,10 +62,10 @@ cd smartline-mes
 
 **방법 B — git 없이**
 1. 이 페이지 위쪽 초록색 **Code** 버튼 → **Download ZIP**
-2. 바탕화면에 압축을 풀고 폴더 이름을 `smartline-mes`로 바꾸기
+2. 정한 폴더에 압축을 풀고, 폴더 이름을 `smartline-mes`로 바꾸기
 3. 터미널에서 그 폴더로 이동
 ```bash
-cd ~/Desktop/smartline-mes
+cd smartline-mes
 ```
 
 ### 3. 라이브러리 설치 (처음 한 번 · 5~10분)
@@ -102,7 +110,7 @@ uv run app.py
 
 - 첫 화면은 **안전 게이트**입니다. 카메라가 없으면 아래 **관리자 우회 입장**에 PIN을 넣고 들어가세요 (설정 안 했으면 `0000`).
 - 끄기: 터미널에서 **Ctrl + C**
-- 다음부터는 터미널에서 폴더로 이동(`cd ~/Desktop/smartline-mes`) 후 `uv run app.py`만 하면 됩니다.
+- 다음부터는 터미널에서 `smartline-mes` 폴더로 이동(`cd 저장한_폴더_경로/smartline-mes`) 후 `uv run app.py`만 하면 됩니다.
 
 ### 7. 최신 버전 받기
 
