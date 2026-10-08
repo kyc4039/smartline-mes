@@ -1,0 +1,928 @@
+{% extends "base.html" %}
+{% block head %}<script src="/static/incident.js"></script><link rel="stylesheet" href="/static/twin.css"><script src="/static/flow.js"></script><script>window.FLOW_ON = {{ flow_v2|tojson }}; if (FLOW_ON) FLOW.start();</script><script src="/static/twin.js"></script>{% endblock %}
+{% block body %}
+<div id="incidentBox"></div>
+
+<div class="twin">
+  <section class="scene" id="scene" aria-label="입체 공정 라인">
+    <div class="overlay">
+      <span class="chipx" id="modeChip">LINE A · 실시간</span>
+      <!-- ① 레이어 전환 -->
+      <div class="seg" id="layerSeg" role="group" aria-label="레이어" {% if 'layers' not in twin_features %}hidden{% endif %}>
+        <button data-l="status" class="on">상태</button>
+        <button data-l="stops">정지 빈도</button>
+        <button data-l="oee">OEE</button>
+        <button data-l="tickets">정비 요청</button>
+      </div>
+    </div>
+    <div class="overlay right">
+      <button class="tbtn" id="simBtn" {% if 'sim' not in twin_features %}hidden{% endif %}>가정 시뮬레이션</button>
+      <button class="tbtn" id="replayBtn" {% if 'replay' not in twin_features %}hidden{% endif %}>⏪ 리플레이</button>
+    </div>
+    <div class="flow-chip" id="flowChip" hidden></div>
+    <div id="sceneSvg"></div>
+    <div class="legend" id="legend" hidden>
+      <div class="ends"><span id="lgLo"></span><span id="lgWin"></span><span id="lgHi"></span></div>
+      <div class="bar" id="lgBar"></div>
+    </div>
+    <span class="chipx muted" id="hint" style="position:absolute;right:16px;bottom:14px;z-index:1">설비를 누르면 상세 정보가 열려요</span>
+    <!-- 확대 · 축소 · 처음 화면 (＋ / － 버튼으로만 확대, 화면을 끌어서 이동) -->
+    <div class="zoomctl" role="group" aria-label="화면 확대">
+      <button id="zIn" aria-label="확대" title="확대">＋</button>
+      <button id="zOut" aria-label="축소" title="축소">－</button>
+      <button id="zFit" aria-label="처음 화면" title="처음 화면으로">⟲</button>
+      <span id="zPct">100%</span>
+    </div>
+  </section>
+
+  <aside class="panel" aria-label="설비 정보" style="min-width:0">
+    <!-- 기본: 라인 요약과 설비 목록 -->
+    <div id="sideSummary" style="display:flex;flex-direction:column;gap:14px">
+      <h2>라인 요약</h2>
+      <div class="stat3">
+        <div><div class="small muted">가동</div><div class="v" id="sRun">-</div></div>
+        <div><div class="small muted">불량률 (오늘)</div><div class="v" id="sRate">-</div></div>
+        <div><div class="small muted">정비 대기</div><div class="v" id="sTicket">-</div></div>
+      </div>
+      <div class="stat3">
+        <div><div class="small muted">오늘 불량 배출</div><div class="v c-bad" id="sBin">-</div></div>
+        <div><div class="small muted">위험구역 진입</div><div class="v c-warn" id="sZone">-</div></div>
+        <div><div class="small muted">마지막 불량</div><div class="v" id="sLast" style="font-size:14px">-</div></div>
+      </div>
+      <h2>설비</h2>
+      <div class="eqlist" id="eqList"></div>
+    </div>
+
+    <!-- 설비를 선택했을 때: 상세 (공통 틀: 이름·상태 → 카메라 → 숫자 3칸 → 그 설비만의 정보 → 정비 요청 · 최근 기록 → 버튼) -->
+    <div id="sideDetail" style="display:none;flex-direction:column;gap:12px">
+      <div class="sd-hd"><div class="ic" id="dIc">⚙</div>
+        <div style="min-width:0"><div class="small muted" id="dSub">선택한 설비</div><div class="nm" id="dName"></div></div>
+        <button class="btn" aria-label="닫기" onclick="select(null)" style="width:44px;padding:0;margin-left:auto">✕</button></div>
+      <div class="sd-st" id="dState"><b id="dStatus"></b><span id="dReason"></span></div>
+      <div id="dCamWrap"></div>
+      <div class="sd-n3" id="dNums"></div>
+      <div id="dExtra" style="display:flex;flex-direction:column;gap:10px"></div>
+      <div class="sd-health" id="dHealth"></div>
+      <div id="dTicketList" style="display:flex;flex-direction:column;gap:6px"></div>
+      <div><div class="sd-sec">최근 기록</div><ol class="log" id="dEvents"></ol></div>
+      <div class="sd-btns" id="dBtns"></div>
+    </div>
+
+    <!-- ① 안전 게이트 -->
+    <div id="sideGate" style="display:none;flex-direction:column;gap:14px">
+      <div class="sd-hd"><div class="ic">🦺</div>
+        <div style="min-width:0"><div class="small muted">① 공정 시작</div><div class="nm">안전 게이트</div></div>
+        <button class="btn" aria-label="닫기" onclick="select(null)" style="width:44px;padding:0;margin-left:auto">✕</button></div>
+      <div id="gtCamWrap"></div>
+      <div class="state t-ok" id="gtState"><div class="small">보호구 검사 (CAM 1 · 팀원1)</div><div class="big" style="font-size:22px" id="gtStatus">-</div>
+        <div class="small">안전모 · 조끼 · 장갑을 모두 착용해야 입장(로그인)할 수 있어요</div></div>
+      <div class="stat3" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+        <div><div class="small muted">오늘 입장</div><div class="v" id="gtCount">-</div></div>
+        <div><div class="small muted">마지막 입장</div><div class="v" id="gtLast" style="font-size:16px">-</div></div></div>
+      <div class="sd-chk" id="gtItems"></div>
+      <div><div class="sd-sec">오늘 기록</div><div class="sd-list" id="gtLog"></div></div>
+      <div class="small muted">입장한 작업자는 초록 점선 동선을 따라 프레스 앞 작업 위치로 이동해요.</div>
+    </div>
+
+    <!-- 🔧 정비 구역 (10/07): 설비 보전 페이지와 같은 데이터 -->
+    <div id="sideMech" style="display:none;flex-direction:column;gap:14px">
+      <div class="sd-hd"><div class="ic">🔧</div>
+        <div style="min-width:0"><div class="small muted">설비 보전</div><div class="nm">정비 구역</div></div>
+        <button class="btn" aria-label="닫기" onclick="select(null)" style="width:44px;padding:0;margin-left:auto">✕</button></div>
+      <div class="state t-data" id="mkWho"><div class="small">정비원</div><div class="big" style="font-size:20px" id="mkWhoT">-</div><div class="small" id="mkWhoS"></div></div>
+      <div class="stat3">
+        <div><div class="small muted">열린 요청</div><div class="v" id="mkOpen">-</div></div>
+        <div><div class="small muted">조치 중</div><div class="v" id="mkDoing">-</div></div>
+        <div><div class="small muted">평균 수리</div><div class="v" id="mkMttr">-</div></div></div>
+      <div><div class="sd-sec">정비 요청 <span>급한 순 · 누르면 그 설비</span></div><div id="mkList" style="display:flex;flex-direction:column;gap:6px"></div></div>
+      <div><div class="sd-sec">오늘 예방 정비 <span id="mkPmN"></span></div><div id="mkPm" style="display:flex;flex-direction:column;gap:4px"></div></div>
+      <a class="btn" href="/maintenance" style="text-align:center">설비 보전 페이지 열기 →</a>
+    </div>
+
+    <!-- ⑥ 출하장 -->
+    <div id="sideShip" style="display:none;flex-direction:column;gap:14px">
+      <div class="sd-hd"><div class="ic">🚚</div>
+        <div style="min-width:0"><div class="small muted">⑥ 공정 끝</div><div class="nm">출하장</div></div>
+        <button class="btn" aria-label="닫기" onclick="select(null)" style="width:44px;padding:0;margin-left:auto">✕</button></div>
+      <div class="state t-data" id="spState"><div class="small" id="spLot">진행 중 LOT</div>
+        <div class="big" style="font-size:22px" id="spLeft">-</div><div class="small" id="spSub"></div></div>
+      <div class="stat3">
+        <div><div class="small muted">이번 LOT 양품</div><div class="v" id="spGood">-</div></div>
+        <div><div class="small muted">적재 팔레트</div><div class="v" id="spPallet">-</div></div>
+        <div><div class="small muted">불량</div><div class="v" id="spBad">-</div></div></div>
+      <div class="stat3">
+        <div><div class="small muted">오늘 출발 트럭</div><div class="v" id="spLots">-</div></div>
+        <div><div class="small muted">출하 팔레트</div><div class="v" id="spShipped">-</div></div>
+        <div><div class="small muted">팔레트당</div><div class="v" id="spSize">12개</div></div></div>
+      <div class="card" style="padding:12px 14px;font-size:14px;line-height:1.7">로봇이 팔레트에 양품을 쌓으면 지게차가 트럭으로 실어 날라요.
+        트럭에 10팔레트가 실리면 출발하고, 빈 트럭이 다시 들어와요.
+        <div class="small muted" style="margin-top:6px" id="spRule"></div></div>
+      <a class="btn" href="/production" style="justify-content:center">생산 관리에서 LOT 목록 보기 →</a>
+    </div>
+
+    <!-- 작업자 대시보드: 프레스 앞 작업자가 보는 화면 (트윈의 키오스크 화면과 같은 내용) -->
+    <div id="sideHmi" style="display:none;flex-direction:column;gap:14px">
+      <div class="sd-hd"><div class="ic">🖥</div>
+        <div style="min-width:0"><div class="small muted">선택한 곳</div><div class="nm">작업자 대시보드</div></div>
+        <button class="btn" aria-label="닫기" onclick="select(null)" style="width:44px;padding:0;margin-left:auto">✕</button></div>
+      <div class="small muted">프레스 앞 키오스크 화면이에요. 작업자가 고개만 돌리면 프레스 상태와 경고를 볼 수 있어요.</div>
+      <div id="hmiBig" style="display:flex;flex-direction:column;gap:12px"></div>
+      <div class="card" style="padding:12px 14px">
+        <div style="font-weight:600;margin-bottom:6px">화면이 바뀌는 순간</div>
+        <div class="small" style="line-height:1.8">● 정상 가동: 오늘 생산 · 불량률<br>■ 손 감지: <span class="c-bad">STOP · 기계에서 떨어지세요</span><br>■ 구역 비움: <span class="c-warn">N초 뒤 자동 재가동 카운트다운</span></div>
+      </div>
+      <a class="btn" href="/safety">설비 안전 제어 열기</a>
+    </div>
+
+    <!-- 불량함: 오늘 불량 목록 (종류 · 시각 · 불량 순간 사진) -->
+    <div id="sideBin" style="display:none;flex-direction:column;gap:14px">
+      <div class="sd-hd"><div class="ic">🗑</div>
+        <div style="min-width:0"><div class="small muted">선택한 곳</div><div class="nm">불량함</div></div>
+        <button class="btn" aria-label="닫기" onclick="select(null)" style="width:44px;padding:0;margin-left:auto">✕</button></div>
+      <div class="state t-bad" style="padding:14px 16px">
+        <div class="small">오늘 배출된 불량</div>
+        <div class="big" style="font-size:30px" id="binCount">-</div>
+        <div class="small" id="binLast"></div>
+      </div>
+      <div><div style="font-weight:600;margin-bottom:8px">불량 종류</div><div id="binTypes" class="bintypes"></div></div>
+      <div><div style="font-weight:600;margin-bottom:8px">불량 목록 <span class="small muted">(최신 순)</span></div>
+        <div id="binList" class="binlist"></div></div>
+      <a class="btn" href="/quality">품질 관리 페이지 열기</a>
+    </div>
+
+    <!-- ① 레이어: 순위 -->
+    <div id="sideLayer" style="display:none;flex-direction:column;gap:12px">
+      <div class="row"><h2 id="lyTitle">정지 빈도</h2>
+        <div class="mini-seg" id="lyRange"><button data-k="shift" class="on">이번 교대</button><button data-k="today">오늘</button></div></div>
+      <div class="small muted" id="lyDesc"></div>
+      <div class="rank" id="lyRank"></div>
+      <div class="small muted">줄을 누르면 그 설비의 상세 정보가 열려요. '상태'를 누르면 원래 색으로 돌아가요.</div>
+    </div>
+
+    <!-- ④ 가정 시뮬레이션 -->
+    <div id="sideSim" style="display:none;flex-direction:column;gap:12px">
+      <div class="row"><h2>가정 시뮬레이션</h2>
+        <div class="mini-seg" id="simRange"><button data-k="shift" class="on">이번 교대</button><button data-k="today">오늘</button></div></div>
+      <div class="small muted" id="simBase">-</div>
+      <div id="simSliders"></div>
+      <div class="kpi2">
+        <div><div class="small muted">양품 생산량 (같은 시간)</div><div><span class="now" id="kNowN">-</span> <span class="muted">→</span> <span class="new" id="kNewN">-</span></div><div class="d" id="kDN"></div></div>
+        <div><div class="small muted">OEE</div><div><span class="now" id="kNowO">-</span> <span class="muted">→</span> <span class="new" id="kNewO">-</span></div><div class="d" id="kDO"></div></div>
+      </div>
+      <div class="small muted" id="kShift"></div>
+      <div class="card" style="padding:10px 12px">
+        <div class="small muted" style="margin-bottom:8px">OEE 세 요소 (회색 지금 · 파랑 가정)</div>
+        <div class="apq" id="simApq"></div>
+      </div>
+      <div class="small c-warn" id="simBest"></div>
+      <div class="row" style="gap:8px">
+        <button class="btn" id="simReset" style="flex:1">처음 값으로</button>
+        <button class="btn" id="simClose" style="flex:1">닫기</button>
+      </div>
+      <div class="small muted">가정 모드는 화면 계산만 해요. 실제 설비에는 영향이 없어요.</div>
+    </div>
+
+    <!-- ③ 리플레이: 그 순간 -->
+    <div id="sideReplay" style="display:none;flex-direction:column;gap:12px">
+      <div><div class="small muted">과거 보기 (실시간 아님)</div><div style="font-family:var(--mono);font-size:28px;font-weight:600" id="rpTime">-</div></div>
+      <div class="card" style="padding:12px 14px" id="rpInc"></div>
+      <div class="momentlist" id="rpList"></div>
+      <button class="btn primary" id="rpExit">● 실시간으로 돌아가기</button>
+    </div>
+  </aside>
+
+  <!-- ③ 리플레이: 시간 막대 -->
+  <section class="replay" id="replayBar" hidden aria-label="리플레이 시간 막대">
+    <div class="ctrl">
+      <button class="btn" id="rpStart" aria-label="처음으로">⏮</button>
+      <button class="btn" id="rpPrev">◀ 이전 사건</button>
+      <button class="btn on" id="rpPlay" style="min-width:96px">▶ 재생</button>
+      <button class="btn" id="rpNext">다음 사건 ▶</button>
+      <div class="mini-seg" id="rpSpeed" style="margin-left:6px"><button data-s="1">×1</button><button data-s="10" class="on">×10</button><button data-s="60">×60</button></div>
+      <div class="mini-seg" id="rpRange" style="margin-left:auto"><button data-k="hour" class="on">최근 1시간</button><button data-k="shift">이번 교대</button><button data-k="today">오늘</button></div>
+    </div>
+    <svg id="rpSvg" height="230" role="img" aria-label="설비별 상태 시간 막대. 끌어서 과거 시각을 고릅니다"></svg>
+    <div class="small muted" style="padding:2px 0 4px">막대를 끌거나 눌러서 시각을 고르고, ▲ 표식을 누르면 그 사건 직전으로 이동해요.</div>
+  </section>
+</div>
+
+<script>
+// 설비별 카메라와 상세 페이지
+const CAM = {"프레스 #1": ["/safety/video", "CAM 3 · 금형부"], "비전 검사기": ["/quality/video", "CAM 2 · 검사 스테이션"]};
+const PAGE = {"프레스 #1": ["/safety", "설비 안전 제어"], "비전 검사기": ["/quality", "품질 관리"]};
+const URG = {"상": "즉시", "중": "당일", "하": "정기"}, UT = {"상": "bad", "중": "warn", "하": "ok"};
+const $ = id => document.getElementById(id);
+// 보일 추가 기능 (config.py의 TWIN_FEATURES)
+const FEAT = {layers: {{ 'true' if 'layers' in twin_features else 'false' }}, sim: {{ 'true' if 'sim' in twin_features else 'false' }}, replay: {{ 'true' if 'replay' in twin_features else 'false' }}};
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const segOn = (el, attr, val) => el.querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset[attr] === String(val)));
+
+sceneSvg.innerHTML = TW.build();
+// 새 흐름(FLOW_V2) 상태 한 줄: 정지 · 적체 · 빨리감기 · 평소 (세 화면 공통 문구)
+setInterval(() => {
+  const st = window.FLOW_ON && FLOW.ready() && mode !== "replay" ? FLOW.status() : null;
+  flowChip.hidden = !st; if (st) { flowChip.className = "flow-chip " + st.kind; flowChip.textContent = st.text; }
+}, 500);
+const BIN = "불량함";      // 불량함 (설비는 아니지만 눌러서 메뉴를 여는 곳)
+const HMI = TW.HMI_NAME;   // 작업자 대시보드 (프레스 앞 키오스크)
+const GATE = TW.GATE_NAME, SHIP = TW.SHIP_NAME;     // ① 안전 게이트 · ⑥ 출하장
+const MECH = TW.MECH_NAME;   // 정비 구역 (정비 요청 · 예방 정비 · 정비원)
+const PLACES = [BIN, HMI, GATE, SHIP, MECH];                           // 설비는 아니지만 눌러서 정보를 보는 곳
+let selected = null, lastState = null, info = {};
+// 설비별 메뉴 숫자 (/api/twin/eq): 설비 · 게이트를 선택했을 때만 3초마다 받음
+let eqData = null;
+function loadEq() {
+  const n = selected; if (!n || (PLACES.includes(n) && n !== GATE)) return;
+  fetch("/api/twin/eq?name=" + encodeURIComponent(n)).then(r => r.json()).then(d => { if (selected === n) { eqData = d; if (lastState) render(lastState); } }).catch(() => {});
+}
+setInterval(loadEq, 3000);
+const EQ_META = {
+  "자재 투입기": ["🛒", "② 자재 투입 · AMR"], "프레스 #1": ["⚙", "③ 성형 · CAM 3"], "컨베이어": ["⟿", "이송"],
+  "비전 검사기": ["◎", "④ 검사 · CAM 2"], "로봇 적재기": ["🦾", "⑤ 적재"],
+};
+let mode = "live";          // live(실시간) | sim(가정 시뮬레이션) | replay(리플레이)
+let layer = "status";       // status | stops | oee | tickets
+let layerRange = "shift", layerData = null, lastDefects = null;
+
+// 장면 클릭: 설비 또는 이름표를 누르면 선택, 빈 곳을 누르면 해제
+sceneSvg.addEventListener("click", e => {
+  if (zoom.dragged) { zoom.dragged = false; return; }     // 끌어서 이동한 뒤 손을 뗀 것은 클릭이 아님
+  const g = e.target.closest("[data-eq]");
+  select(g ? g.dataset.eq : null);
+});
+
+// ======================================================================
+// 확대 · 축소 · 이동: SVG의 viewBox(보이는 범위)를 바꿔서 구현 (그림은 그대로라 글자도 선명)
+//   ＋ / － 버튼 = 확대/축소 (마우스 휠은 쓰지 않음 — 페이지 스크롤과 헷갈려서), 끌기 = 이동, ⟲ = 처음 화면
+// ======================================================================
+const zoom = (() => {
+  const svg = sceneSvg.querySelector("svg");
+  const base = svg.getAttribute("viewBox").split(" ").map(Number);   // 처음 화면 [x, y, 폭, 높이]
+  const MIN = 1, MAX = 4;                                            // 배율 범위 (1 = 처음 화면)
+  let vb = base.slice(), drag = null;
+  const z = {dragged: false};
+  const scale = () => base[2] / vb[2];
+  function apply() {
+    // 그림이 화면 밖으로 너무 나가지 않게: 보이는 범위의 가운데가 처음 화면 안에 있도록
+    const cx = Math.max(base[0], Math.min(base[0] + base[2], vb[0] + vb[2] / 2));
+    const cy = Math.max(base[1], Math.min(base[1] + base[3], vb[1] + vb[3] / 2));
+    vb[0] = cx - vb[2] / 2; vb[1] = cy - vb[3] / 2;
+    svg.setAttribute("viewBox", vb.map(v => v.toFixed(1)).join(" "));
+    zPct.textContent = Math.round(scale() * 100) + "%";
+    sceneSvg.classList.toggle("zoomed", scale() > 1.01);
+  }
+  // 화면 좌표(px) → 그림 좌표 (preserveAspectRatio meet: 가로·세로 중 큰 비율로 맞춰짐)
+  function toSvg(px, py) {
+    const r = svg.getBoundingClientRect(), k = Math.max(vb[2] / r.width, vb[3] / r.height);
+    return [vb[0] + vb[2] / 2 + (px - r.left - r.width / 2) * k, vb[1] + vb[3] / 2 + (py - r.top - r.height / 2) * k];
+  }
+  function zoomAt(f, px, py) {                 // f > 1 이면 확대
+    const s = Math.max(MIN, Math.min(MAX, scale() * f)), w = base[2] / s, h = base[3] / s;
+    const [ax, ay] = px == null ? [vb[0] + vb[2] / 2, vb[1] + vb[3] / 2] : toSvg(px, py);
+    // 커서 아래 지점이 그대로 커서 아래에 남도록
+    vb = [ax - (ax - vb[0]) * w / vb[2], ay - (ay - vb[1]) * h / vb[3], w, h];
+    apply();
+  }
+  svg.addEventListener("pointerdown", e => {
+    if (e.button !== 0) return;
+    drag = {x: e.clientX, y: e.clientY, vb: vb.slice(), id: e.pointerId, moved: false};
+  });
+  window.addEventListener("pointermove", e => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (!drag.moved && Math.hypot(dx, dy) < 5) return;              // 5px 안쪽 흔들림은 클릭으로 봄
+    if (!drag.moved) { drag.moved = true; sceneSvg.classList.add("dragging"); }
+    const r = svg.getBoundingClientRect(), k = Math.max(vb[2] / r.width, vb[3] / r.height);
+    vb[0] = drag.vb[0] - dx * k; vb[1] = drag.vb[1] - dy * k;
+    apply();
+  });
+  window.addEventListener("pointerup", e => {
+    if (!drag || e.pointerId !== drag.id) return;
+    z.dragged = drag.moved; drag = null; sceneSvg.classList.remove("dragging");
+    setTimeout(() => { z.dragged = false; }, 50);                    // 클릭 이벤트가 안 오는 경우 대비
+  });
+  zIn.onclick = () => zoomAt(1.25);
+  zOut.onclick = () => zoomAt(1 / 1.25);
+  zFit.onclick = () => { vb = base.slice(); apply(); };
+  return z;
+})();
+
+function select(name) {
+  if (name === selected) return;
+  selected = name;
+  // 카메라 영상은 선택했을 때만 연결 (영상 연결 수를 줄이기 위해)
+  gtCamWrap.innerHTML = name === GATE    // ① 게이트를 누르면 CAM 1 영상 (카메라가 없으면 서버가 NO CAMERA 화면을 보냄)
+    ? `<div class="cam" style="aspect-ratio:16/9"><img src="/gate/video" alt="CAM 1 안전 게이트"><span class="lb">CAM 1 · 안전 게이트</span></div>` : "";
+  dCamWrap.innerHTML = name && CAM[name]
+    ? `<div class="cam" style="aspect-ratio:16/9"><img src="${CAM[name][0]}" alt="${CAM[name][1]}"><span class="lb">${CAM[name][1]}</span></div>`
+    : "";   // 카메라가 없는 설비는 카메라 칸 자체를 보여주지 않음
+  hint.textContent = name ? "빈 곳을 누르면 선택 해제" : "설비를 누르면 상세 정보가 열려요";
+  PLACES.forEach(k => document.querySelectorAll(`[data-eq="${k}"]`).forEach(g => g.classList.toggle("sel", name === k)));
+  eqData = null; loadEq();
+  if (name === HMI) TW.drawHmi();
+  if (name === BIN) { binPick = null; loadDefects(); }
+  if (name === MECH) loadMech();
+  updateSide();
+  redraw();
+}
+
+// 🔧 정비 구역: /api/maint/info (설비 보전 페이지와 같은 숫자) · 선택했을 때만 5초마다
+function loadMech() {
+  if (selected !== MECH) return;
+  fetch("/api/maint/info").then(r => r.json()).then(m => {
+    if (selected !== MECH) return;
+    const b = m.board || {}, k = m.kpi || {}, doing = b.doing || [], wait = b.wait || [];
+    const U = {"상": ["r", "즉시"], "중": ["y", "당일"], "하": ["b", "정기"]};
+    const at = TW.mechAt();
+    mkWhoT.textContent = doing.length ? `조치 중 · ${doing[0].equipment}` : "대기 (정비 구역)";
+    mkWhoS.textContent = doing.length ? `요청 #${doing[0].id} · ${doing[0].text}` + (at !== doing[0].equipment ? " · 이동 중" : "") : "정비 요청이 '조치 중'이 되면 그 설비로 걸어가요";
+    mkOpen.textContent = k.open ?? "-"; mkDoing.textContent = doing.length; mkMttr.textContent = k.mttr != null ? k.mttr + "분" : "-";
+    const row = t => `<button class="eqbtn" onclick="select('${t.equipment}')" style="justify-content:flex-start;gap:8px">
+        <span class="chipU u-${(U[t.urgency] || ["b"])[0]}">${(U[t.urgency] || ["", t.urgency])[1]}</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.equipment)} · ${esc(t.text)}</span>
+        <span class="small muted">${esc(t.status)}</span></button>`;
+    mkList.innerHTML = [...doing, ...wait].slice(0, 6).map(row).join("") || `<div class="small muted">열린 정비 요청 없음</div>`;
+    const pm = m.pm || {}, di = (pm.days || []).findIndex(x => x.today);
+    const items = di < 0 ? [] : (pm.rows || []).flatMap(r => (r.cells[di] || []).map(i => ({eq: r.equipment, ...i})));
+    mkPmN.textContent = items.length ? `${items.filter(i => i.st === "done").length} / ${items.length}` : "";
+    mkPm.innerHTML = items.map(i => `<div class="small">${i.st === "done" ? "☑" : "☐"} ${esc(i.eq)} · ${esc(i.task)}</div>`).join("") || `<div class="small muted">오늘 예정 없음</div>`;
+  }).catch(() => {});
+}
+setInterval(loadMech, 5000);
+
+// 오른쪽 패널: 모드에 따라 하나만 보임
+function updateSide() {
+  const show = mode === "sim" ? "sideSim" : mode === "replay" ? "sideReplay"
+             : selected === BIN ? "sideBin" : selected === HMI ? "sideHmi" : selected === GATE ? "sideGate"
+             : selected === SHIP ? "sideShip" : selected === MECH ? "sideMech" : selected ? "sideDetail" : layer !== "status" ? "sideLayer" : "sideSummary";
+  ["sideSummary", "sideDetail", "sideBin", "sideHmi", "sideGate", "sideShip", "sideMech", "sideLayer", "sideSim", "sideReplay"].forEach(id => $(id).style.display = id === show ? "flex" : "none");
+}
+function redraw() { if (mode === "replay") showAt(rp.t); else if (lastState) render(lastState); }
+
+function loadInfo() { fetch("/api/twin").then(r => r.json()).then(d => { info = d; if (lastState && mode !== "replay") render(lastState); }).catch(() => {}); }
+loadInfo(); setInterval(loadInfo, 3000);
+
+// ======================================================================
+// 실시간 화면
+// ======================================================================
+function render(d) {
+  lastState = d;
+  INC.update(d);            // 사건 연쇄 카드 (리플레이 중에도 실시간 사건은 계속 보여 줌)
+  watchDefects(d);
+  if (mode === "replay") return;     // 리플레이 중에는 장면이 과거 상태를 보여 줌
+
+  const eq = d.equipment, q = d.modules.quality || {};
+  TW.apply(eq, d.modules, selected);
+  TW.mechMove(d.tickets);                                   // 조치 중인 정비 요청 → 정비원이 그 설비로
+  const press = eq.find(e => e.name === "프레스 #1") || {};
+  TW.zone(d.modules.safety, press.status);                 // ② 위험구역
+  if (mode === "live" && layer !== "status" && layerData) TW.paint(layerValues().vals);   // ① 레이어
+  if (mode === "sim") simDecorate();                       // ④ 병목 강조
+
+  // 요약 패널
+  const stopped = eq.filter(e => e.status !== "가동");
+  const open = d.tickets.filter(t => t.status !== "완료");
+  sRun.textContent = `${eq.length - stopped.length}/${eq.length}`;
+  sRate.textContent = ((d.inspections_today ? d.defects_today / d.inspections_today : q.defect_rate || 0) * 100).toFixed(1) + "%";   // 오늘 검사 기록 기준
+  sTicket.textContent = open.length;
+  eqList.innerHTML = TW.names.map(n => {
+    const e = eq.find(x => x.name === n) || {status: "-"}, t = tone(e.status);
+    return `<button class="eqbtn ${t === "ok" || t === "idle" ? "" : "t-" + t}" onclick="select('${n}')">
+      <span>${n}</span><span class="c-${t}" style="font-weight:600">${shape(e.status)} ${esc(e.status)}</span></button>`;
+  }).join("");
+
+  // 상세 패널 (불량함은 따로 그림)
+  drawPlaces(d);
+  if (!selected || PLACES.includes(selected)) return;
+  const e = eq.find(x => x.name === selected) || {}, t = tone(e.status), di = info[selected] || {}, X = eqData && eqData.name === selected ? eqData : null;
+  const meta = EQ_META[selected] || ["⚙", "설비"];
+  dIc.textContent = meta[0]; dIc.className = "ic t-" + t; dSub.textContent = meta[1]; dName.textContent = selected;
+  dState.className = "sd-st t-" + t;
+  dStatus.textContent = `${shape(e.status)} ${e.status || "-"}`;
+  dReason.textContent = e.reason || (e.status === "가동" ? `정상 가동 · ${e.updated ? time(e.updated).slice(0, 5) + "부터" : ""}` : "");
+  // 숫자 3칸 (설비마다 다름)
+  const nums = X && X.nums ? X.nums : [["오늘 정지", di.stops_today ?? "-", "회"], ["미완료 정비", (di.tickets || []).length, "건"], ["상태 변경", e.updated ? time(e.updated).slice(0, 5) : "-", ""]];
+  dNums.innerHTML = nums.map(([l, v, u]) => `<div><div class="l">${esc(l)}</div><div class="v">${esc(String(v))}<small>${esc(u)}</small></div></div>`).join("");
+  dExtra.innerHTML = eqExtra(selected, X, d);
+  // 건강 · 정기 점검 · 반복 고장
+  const H = X && X.health;
+  dHealth.innerHTML = H ? `<span class="hs ${H.score < 50 ? "c-bad" : H.score < 75 ? "c-warn" : "c-ok"}">건강 ${H.score}점</span>
+      <span>7일 고장 ${H.fails7}회</span><span>${H.pm_late ? `<b class="c-bad">정기 점검 지연 ${H.pm_late}건</b>` : H.pm_days != null ? `정기 점검 ${H.pm_days === 0 ? "오늘" : "D-" + H.pm_days} · ${esc(H.pm_task)}` : ""}</span>
+      ${H.repeat ? `<div class="c-warn" style="width:100%">▲ ${esc(H.repeat.type)} 고장 ${H.repeat.n}회 반복 → 근본 원인 점검</div>` : ""}` : "";
+  dHealth.style.display = H ? "" : "none";
+  dTicketList.innerHTML = (di.tickets || []).slice(0, 3).map(k =>
+    `<div class="card ${k.urgency === "상" ? "t-bad" : ""}" style="padding:8px 10px"><div class="row small"><span class="muted">#${k.id} · 정비 요청</span>
+     <span class="c-${UT[k.urgency]}" style="font-weight:700">${URG[k.urgency]}</span></div><div style="color:var(--text)">${esc(k.text)}</div></div>`).join("");
+  dEvents.innerHTML = (di.events || []).slice(0, 5).map(ev => {
+    const c = /안전 정지|고장 정지|불량/.test(ev.event) ? "c-bad" : /연동 정지/.test(ev.event) ? "c-warn" : "";
+    return `<li class="${c}"><span class="tm">${time(ev.ts)}</span><span>${esc(ev.event)}</span></li>`; }).join("")
+    || '<li class="muted">기록 없음</li>';
+  const rq = "/maintenance?equipment=" + encodeURIComponent(selected);
+  const B = {
+    "자재 투입기": [["/timeline", "타임라인"], [rq, "정비 요청", "pr"]],
+    "프레스 #1": [["#estop", "⏻ 비상 정지", "dg"], ["/safety", "안전 제어"], [rq, "정비 요청", "pr"]],
+    "컨베이어": [["/timeline", "타임라인"], [rq, "정비 요청", "pr"]],
+    "비전 검사기": [["#bin", "불량함 보기"], ["/quality", "품질 관리", "pr"]],
+    "로봇 적재기": [["#ship", "출하장 보기"], [rq, "정비 요청", "pr"]],
+  }[selected] || [[rq, "정비 요청", "pr"]];
+  dBtns.innerHTML = B.map(([h, l, c]) => `<a class="btn ${c === "pr" ? "primary" : c === "dg" ? "estop" : ""}" href="${h}">${l}</a>`).join("");
+}
+
+// 오른쪽 메뉴 버튼 중 페이지 이동이 아닌 것 (비상 정지 · 다른 곳 선택)
+dBtns.addEventListener("click", ev => {
+  const a = ev.target.closest("a"); if (!a) return;
+  const h = a.getAttribute("href");
+  if (h === "#estop") { ev.preventDefault(); fetch("/api/safety/estop", {method: "POST", headers: {"Content-Type": "application/json"}, body: "{}"}); }
+  else if (h === "#bin") { ev.preventDefault(); select(BIN); }
+  else if (h === "#ship") { ev.preventDefault(); select(SHIP); }
+});
+
+// 설비마다 다른 '그 설비만의 정보' 칸
+function eqExtra(name, X, d) {
+  const dur = s => s < 60 ? `${Math.round(s)}초` : `${(s / 60).toFixed(s < 600 ? 1 : 0)}분`;
+  if (name === "자재 투입기") {
+    const A = TW.phase ? TW.phase() : {u: 0.95, buf: 4}, u = A.u;
+    const k = u < 0.35 ? 0 : u < 0.45 ? 1 : u < 0.8 ? 2 : u < 0.9 ? 3 : 4;     // 창고로 → 싣기 → 입구로 → 내림 → 대기
+    const steps = ["창고로 복귀", "창고에서 4개 싣기", "입구로 이동", "투입 대기 칸에 내림", "대기"];
+    let h = `<div><div class="sd-sec">AMR 지금 하는 일 <span>한 바퀴 = 상자 4개 ({{ takt }}초 × 4)</span></div><div class="sd-steps">${steps.map((s, i) => `<span class="${i === k ? "on" : ""}">${s}</span>`).join("")}</div></div>` +
+      `<div><div class="sd-sec">투입 대기 칸 <span>${A.buf} / 4개 · {{ takt }}초마다 1개씩 컨베이어로</span></div><div class="bar" style="height:10px"><i style="width:${A.buf * 25}%;background:var(--ok)"></i></div></div>`;
+    if (X && X.stock) { const r = X.stock.ratio, c = r < 0.3 ? "var(--warn)" : "var(--ok)";
+      h += `<div><div class="sd-sec">자재 선반 재고 (추정) <span class="${r < 0.3 ? "c-warn" : ""}">${r < 0.3 ? `▲ 약 ${X.stock.eta_min}분 뒤 보충 필요` : `약 ${X.stock.eta_min}분 분량`}</span></div>
+        <div class="bar" style="height:10px"><i style="width:${(r * 100).toFixed(0)}%;background:${c}"></i></div>
+        <div class="small muted" style="margin-top:4px">남은 자재 ≈ ${X.stock.left.toLocaleString()}개 (${Math.round(r * 100)}%) · 보충 1회 = ${X.stock.refill.toLocaleString()}개</div></div>`; }
+    return h;
+  }
+  if (name === "프레스 #1") {
+    const s = (d.modules || {}).safety || {}, stop = s.status === "안전 정지", hit = stop && s.zone_clear === false;
+    const conds = [[!hit, "위험구역 비어 있음", stop && !hit && !s.hold ? `${(s.clear_seconds || 0).toFixed(1)} / ${s.auto_release_sec || 5}초` : hit ? "손 감지" : ""],
+                   [s.hold !== "estop", "비상 정지 해제", s.hold === "estop" ? "관리자 수동 재가동" : ""],
+                   [s.hold !== "lock", "정비 잠금 없음", s.hold === "lock" ? (s.lock_by || "") : ""]];
+    return `<div><div class="sd-sec">재가동 조건 <span>${stop ? "모두 ✓이면 자동 재가동" : "가동 중"}</span></div><div class="sd-list">${conds.map(([ok, t, r]) =>
+      `<div><span class="${ok ? "c-ok" : "c-bad"}">${ok ? "✓" : "✕"}</span>${t}<span class="r mono">${esc(r)}</span></div>`).join("")}</div></div>`;
+  }
+  if (name === "컨베이어" && X) {
+    const col = {"프레스 #1": "#F0605D", "로봇 적재기": "#F5B544", "자재 투입기": "#4CC3FF", "비전 검사기": "#B48CF2", "컨베이어": "#93A3AD"};
+    const tot = Math.max(1, X.down);
+    let h = `<div><div class="sd-sec">이번 교대 멈춘 시간 ${dur(X.down)} · 원인 설비 <span>컨베이어는 대부분 '연동' 정지</span></div>` +
+      (X.down ? `<div class="sd-stack">${X.causes.map(c => `<i style="width:${c.sec / tot * 100}%;background:${col[c.name] || "#93A3AD"}" title="${esc(c.name)} ${dur(c.sec)}"></i>`).join("")}</div>
+       <div class="small muted" style="margin-top:6px">${X.causes.map(c => `<span style="color:${col[c.name] || "#93A3AD"}">■</span> ${esc(c.name === "컨베이어" ? "자체" : c.name)} ${dur(c.sec)}`).join(" · ")}</div>` : `<div class="small c-ok">멈춘 적 없음 👍</div>`) + `</div>`;
+    h += `<div><div class="sd-sec">시간대별 가동률</div><div class="sd-hours">${X.hours.map(x => `<div><i style="height:${Math.max(4, x.ratio * 100)}%;background:${x.ratio >= 0.85 ? "var(--ok)" : x.ratio >= 0.6 ? "var(--warn)" : "var(--bad)"}"></i><span>${x.h}</span></div>`).join("")}</div></div>`;
+    return h;
+  }
+  if (name === "비전 검사기" && X) {
+    const L = X.last, mx = Math.max(1, ...X.heat);
+    const NM = ["왼쪽 위", "가운데 위", "오른쪽 위", "왼쪽", "가운데", "오른쪽", "왼쪽 아래", "가운데 아래", "오른쪽 아래"];
+    const top = X.heat.indexOf(Math.max(...X.heat));
+    let h = L ? `<div class="sd-list"><div>최근 판정 <b class="${L.result === "불량" ? "c-bad" : "c-ok"}" style="margin-left:6px">${L.result === "불량" ? "■ 불량" : "● 정상"}${L.type ? " · " + esc(L.type) : ""}</b><span class="r mono">${L.conf != null ? "신뢰도 " + Number(L.conf).toFixed(2) : ""} · ${time(L.ts)}</span></div></div>` : "";
+    h += `<div style="display:flex;gap:14px;align-items:center"><div class="sd-heat">${X.heat.map(v => `<i style="background:${v ? `rgba(240,96,93,${(0.25 + v / mx * 0.75).toFixed(2)})` : "#26323A"}">${v || ""}</i>`).join("")}</div>
+      <div class="small muted" style="line-height:1.7">불량이 나오는 위치 (오늘)<br>${Math.max(...X.heat) ? `<span class="c-bad">▲ ${NM[top]} ${X.heat[top]}건</span><br>→ 그 부분 금형 확인` : "아직 불량 없음"}</div></div>`;
+    h += `<div><div class="sd-sec">최근 판정 <span>빨간 칸 = 불량 · 왼쪽이 오래된 것</span></div><div class="sd-strip">${X.recent.map(b => `<i style="background:${b ? "#F0605D" : "#3CC6A8"}"></i>`).join("")}</div></div>`;
+    return h;
+  }
+  if (name === "로봇 적재기") {
+    const sh = TW.ship || {}, size = sh.size || 8, fill = (sh.shown || 0) % size;
+    let boxes = "";
+    for (let k = 0; k < size; k++) { const x = 8 + (k % 4) * 34, y = 46 - Math.floor(k / 4) * 30;
+      boxes += k < fill ? `<rect x="${x}" y="${y}" width="32" height="28" rx="2" fill="#F5B544" stroke="#C98A33"/>` : `<rect x="${x}" y="${y}" width="32" height="28" rx="2" fill="none" stroke="#55646E" stroke-dasharray="3 3"/>`; }
+    return `<div style="display:flex;gap:14px;align-items:center"><svg width="150" height="90" viewBox="0 0 150 90" aria-hidden="true"><rect x="4" y="76" width="142" height="8" rx="1" fill="#8C6B45"/>${boxes}</svg>
+      <div><div class="small muted">지금 팔레트</div><div class="mono" style="font-size:30px;font-weight:600">${fill} / ${size}</div><div class="small muted">${size - fill}개 더 → 지게차 출발</div></div></div>`;
+  }
+  return "";
+}
+
+// ======================================================================
+// 불량함 메뉴: 오늘 불량 목록 (종류 · 시각 · 불량 순간 사진). 열려 있는 동안 5초마다 새로고침
+// ======================================================================
+let binData = null, binPick = null;
+function loadDefects() {
+  fetch("/api/defects").then(r => r.json()).then(d => { binData = d; drawBin(); }).catch(() => {});
+}
+setInterval(() => { if (selected === BIN) loadDefects(); }, 5000);
+
+// ① 게이트 · ⑥ 출하장 정보
+function drawPlaces(d) {
+  const g = (d.modules || {}).gate || {};
+  TW.gateState(g.status, g);
+  if (selected === GATE) {
+    gtStatus.textContent = g.status ? `${shape(g.status)} ${g.status}` : "대기";
+    gtState.className = "state t-" + (g.status === "입장 허용" ? "ok" : tone(g.status) === "warn" ? "warn" : "idle");
+    const s = (layerData || {}).summary || {};
+    gtCount.textContent = s.entries_today != null ? s.entries_today + "회" : "-";
+    gtLast.textContent = s.last_entry ? time(s.last_entry) : "-";
+    const it = g.items || {}, lb = g.labels || {"helmet": "안전모", "vest": "조끼", "gloves": "장갑"};
+    gtItems.innerHTML = Object.keys(lb).map(k => `<span class="${it[k] ? "on" : ""}">${it[k] ? "✓" : "○"} ${esc(lb[k])}</span>`).join("");
+    const X = eqData && eqData.name === GATE ? eqData : null;
+    if (X) gtLog.innerHTML = (X.log || []).map(e => `<div><span class="t">${time(e.ts).slice(0, 5)}</span>${esc(e.event)}<span class="r tg ${/승인/.test(e.event) ? "g" : /실패/.test(e.event) ? "y" : ""}">${/승인/.test(e.event) ? "입장" : /우회/.test(e.event) ? "PIN" : /퇴장/.test(e.event) ? "퇴장" : ""}</span></div>`).join("") || '<div class="muted">오늘 기록 없음</div>';
+  }
+  if (selected === SHIP) drawShip();
+}
+
+// ⑥ LOT 출하: 5초마다 생산 집계를 받아 트럭 위 안내판·출발 시각에 반영
+let lotData = null, lotAt = 0;
+function loadLot() {
+  fetch("/api/production").then(r => r.json()).then(d => { lotData = d; lotAt = Date.now(); TW.lot(d); drawShip(); }).catch(() => {});
+}
+function drawShip() {
+  if (!lotData || selected !== SHIP) return;
+  const d = lotData, c = d.current, t = d.today;
+  const live = c.last_insp && d.now - c.last_insp < 120;
+  const dur = s => s < 60 ? Math.round(s) + "초" : Math.round(s / 60) + "분";
+  spLot.textContent = live ? `적재 중 LOT ${c.id} · ${hm(c.start)} 시작` : "품질 카메라 대기 중 · 트윈은 시뮬레이션으로 쌓는 중";
+  spLeft.textContent = live ? `트럭 출발까지 ${c.left_pallets}팔레트 (≈ ${dur(c.eta_sec)})` : `실제 기록: LOT ${c.id} · ${c.pallets}/${d.truck_pallets}팔레트`;
+  spSub.textContent = d.last_shipped ? `직전 출발: LOT ${d.last_shipped.id} · ${time(d.last_shipped.end)}` : "오늘 아직 출발한 트럭이 없어요";
+  spGood.textContent = c.good.toLocaleString() + "개";
+  spPallet.textContent = `${c.pallets} / ${d.truck_pallets}`;
+  spBad.textContent = c.defects + "개";
+  spLots.textContent = t.trucks + "대";
+  spShipped.textContent = t.shipped_pallets.toLocaleString() + "개";
+  spSize.textContent = d.pallet_size + "개";
+  spLot.textContent += d.sim ? " · 시뮬레이션 데이터" : "";
+  spRule.textContent = `양품 ${d.pallet_size}개 = 1팔레트 → 지게차가 트럭에 실음 → ${d.truck_pallets}팔레트(${d.lot_good}개)면 트럭 출발 = LOT 1개`;
+}
+loadLot(); setInterval(loadLot, 5000); setInterval(drawShip, 1000);
+
+// 작업자 대시보드 화면의 오늘 생산 · 불량률 (10초마다)
+function loadHmiStats() {
+  fetch("/api/dashboard").then(r => r.json()).then(k =>
+    TW.hmiStats(k.inspections_today, k.inspections_today ? k.defects_today / k.inspections_today : null)).catch(() => {});
+}
+loadHmiStats(); setInterval(loadHmiStats, 10000);
+
+function drawBin() {
+  const d = binData; if (!d) return;
+  binCount.textContent = d.count + "개";
+  binLast.textContent = d.rows.length ? `마지막 불량 ${time(d.rows[0].ts)} · ${d.rows[0].defect_type || "유형 미상"}` : "오늘은 아직 불량이 없어요";
+  const max = Math.max(1, ...Object.values(d.types));
+  binTypes.innerHTML = Object.entries(d.types).map(([t, n]) =>
+    `<div class="bt"><span>${esc(t)}</span><div class="bar"><i style="width:${n / max * 100}%;background:var(--bad)"></i></div><span class="mono">${n}</span></div>`).join("")
+    || '<div class="small muted">-</div>';
+  binList.innerHTML = d.rows.map(r => `<div class="binrow">
+      <span class="ph">■</span><span class="mono">${time(r.ts)}</span><span class="c-bad">${esc(r.defect_type || "유형 미상")}</span><span class="mono muted">#${r.id}</span></div>`).join("")
+    || '<div class="empty">오늘 배출된 불량이 없습니다</div>';
+}
+
+// ======================================================================
+// ② 불량품 추적: 검사 수량 중 불량 개수가 늘면 빨간 상자가 배출 레일로 빠짐
+// ======================================================================
+function watchDefects(d) {
+  const q = d.modules.quality || {};
+  if (q.defects == null) return;
+  if (lastDefects !== null && q.defects > lastDefects && mode !== "replay") {
+    const n = Math.min(q.defects - lastDefects, 3);
+    for (let i = 0; i < n; i++) setTimeout(() => TW.spawnDefect(q.defect_type || ""), i * 700);
+  }
+  lastDefects = q.defects;
+}
+
+// ======================================================================
+// ① 레이어 전환 (+ ② 오늘 요약 숫자)
+// ======================================================================
+const LAYERS = {
+  stops: {name: "정지 빈도", lo: "정지 적음", hi: "정지 많음",
+    desc: "멈춰 있던 시간이 길수록 붉게 칠해요. 컨베이어는 다른 설비 때문에 '연동 정지'한 시간도 포함돼요.",
+    calc: (e, all) => { const mx = Math.max(1, ...all.map(x => x.downtime));
+      return {heat: e.downtime / mx, main: `${e.stops}회`, sub: mins(e.downtime),
+              text: e.stops ? `${e.stops}회 · ${mins(e.downtime)}` : "정지 없음"}; }},
+  oee: {name: "OEE", lo: "높음", hi: "낮음",
+    desc: "설비별 OEE(가동률 × 라인 성능 × 라인 품질)가 낮을수록 붉게 칠해요. 50% 이하면 가장 붉어요.",
+    calc: e => { const v = e.oee ?? e.availability, nm = e.oee == null ? "가동률" : "OEE";
+      return v == null ? {heat: null, main: "-", sub: "", text: "데이터 없음"}
+        : {heat: clamp((1 - v) / 0.5, 0, 1), main: pctTxt(v), sub: nm, text: `${nm} ${(v * 100).toFixed(0)}%`}; }},
+  tickets: {name: "정비 요청", lo: "요청 적음", hi: "요청 많음",
+    desc: "완료되지 않은 정비 요청이 많을수록 붉게 칠해요. 즉시 조치 요청은 2건으로 셉니다.",
+    calc: (e, all) => { const sc = x => x.open + x.urgent; const mx = Math.max(1, ...all.map(sc));
+      return {heat: sc(e) / mx, main: `대기 ${e.open}건`, sub: e.urgent ? `즉시 ${e.urgent}` : `기간 ${e.tickets}건`,
+              text: e.open ? `대기 ${e.open}건${e.urgent ? ` · 즉시 ${e.urgent}` : ""}` : "정비 요청 없음"}; }},
+};
+const heatTone = (h, L) => h == null ? "idle" : h >= 0.7 ? "bad" : h >= 0.45 ? "warn" : (L === "oee" || h > 0) ? "ok" : "idle";
+
+function layerValues() {
+  const L = LAYERS[layer], eq = layerData.equipment, all = Object.values(eq);
+  const vals = {}, rows = [];
+  TW.names.forEach(n => {
+    const e = eq[n]; if (!e) return;
+    const v = L.calc(e, all);
+    vals[n] = {heat: v.heat, text: v.text, tone: heatTone(v.heat, layer)};
+    rows.push({name: n, ...v});
+  });
+  rows.sort((a, b) => (b.heat ?? -1) - (a.heat ?? -1));
+  return {vals, rows};
+}
+
+function loadLayers() {
+  fetch(`/api/twin/layers?range=${layerRange}`).then(r => r.json()).then(d => {
+    layerData = d;
+    const s = d.summary;
+    sBin.textContent = s.defects_today + "개";
+    sZone.textContent = s.zone_today + "회";
+    sLast.textContent = s.last_defect ? time(s.last_defect) : "-";
+    if (!TW.flowOn() && !document.querySelector("#tw-fx g")) TW.setBin(s.defects_today);   // 새 흐름에서는 장부가 불량함 숫자를 정함
+    if (layer !== "status") drawLayerSide();
+    if (lastState && mode === "live") render(lastState);
+  }).catch(() => {});
+}
+loadLayers(); setInterval(loadLayers, 5000);
+
+function drawLayerSide() {
+  if (!layerData || layer === "status") return;
+  const L = LAYERS[layer], {rows} = layerValues();
+  lyTitle.textContent = L.name + " 레이어";
+  lyDesc.textContent = L.desc;
+  lyRank.innerHTML = rows.map(r => `<button onclick="select('${r.name}')">
+      <span><span class="sw" style="background:${r.heat == null ? "#3A444A" : TW.heat(r.heat)}"></span>${r.name}</span>
+      <span class="m">${esc(r.main)}</span><span class="s">${esc(r.sub)}</span></button>`).join("");
+  lgLo.textContent = L.lo; lgHi.textContent = L.hi;
+  lgWin.textContent = layerData.window.label;
+  lgBar.style.background = TW.legendCSS();
+}
+
+function setLayer(l) {
+  layer = l;
+  segOn(layerSeg, "l", l);
+  if (l === "status") TW.unpaint();
+  legend.hidden = l === "status";
+  drawLayerSide();
+  updateSide();
+  if (lastState) render(lastState);
+}
+layerSeg.onclick = e => { const b = e.target.closest("[data-l]"); if (b && mode === "live") setLayer(b.dataset.l); };
+lyRange.onclick = e => { const b = e.target.closest("[data-k]"); if (!b) return;
+  layerRange = b.dataset.k; segOn(lyRange, "k", layerRange); loadLayers(); };
+
+// ======================================================================
+// 모드 전환: 실시간 ↔ 가정 시뮬레이션 ↔ 리플레이
+// ======================================================================
+function setMode(m) {
+  if (mode === "replay") { rpPause(); replayBar.hidden = true; scene.classList.remove("past"); }
+  if (mode === "sim") { TW.focus(null); TW.ghosts(0); scene.classList.remove("sim"); }
+  mode = m;
+  if (m !== "live" && layer !== "status") setLayer("status");
+  layerSeg.hidden = !(m === "live" && FEAT.layers);   // 숨긴 기능은 다시 보이지 않게
+  simBtn.classList.toggle("on", m === "sim");
+  replayBtn.classList.toggle("on", m === "replay");
+  modeChip.textContent = m === "sim" ? "가정 모드 · 실제 설비에는 영향 없음" : "LINE A · 실시간";
+  modeChip.className = "chipx";
+  if (m === "sim") { scene.classList.add("sim"); loadSim(); }
+  if (m === "replay") { replayBar.hidden = false; scene.classList.add("past"); loadReplay(); }
+  updateSide();
+  if (m !== "replay" && lastState) render(lastState);
+}
+simBtn.onclick = () => setMode(mode === "sim" ? "live" : "sim");
+replayBtn.onclick = () => setMode(mode === "replay" ? "live" : "replay");
+simClose.onclick = () => setMode("live");
+rpExit.onclick = () => setMode("live");
+
+// ======================================================================
+// ④ 가정 시뮬레이션 — /api/oee의 실제 값에서 출발해 숫자를 바꿔 보는 계산
+//   가동 시간 R' = R + Σ(줄인 비율 × 그 원인의 정지 시간)   (계획 시간 E를 넘지 않음)
+//   생산량  N' = R' / 사이클 c          양품 = N' × (1 − 불량률)
+//   OEE'   = (R'/E) × min(1, 목표 사이클/c) × (1 − 불량률)
+// ======================================================================
+const sim = {kind: "shift", o: null, base: null};
+function loadSim() {
+  fetch(`/api/oee?range=${sim.kind}`).then(r => r.json()).then(o => { sim.o = o; buildSim(); }).catch(() => {});
+}
+simRange.onclick = e => { const b = e.target.closest("[data-k]"); if (!b) return;
+  sim.kind = b.dataset.k; segOn(simRange, "k", sim.kind); loadSim(); };
+
+function buildSim() {
+  const o = sim.o, E = o.window.elapsed, R = o.run_minutes * 60, N = o.total, T = o.target_cycle;
+  const C0 = N > 0 && R > 0 ? R / N : T, dr0 = N > 0 ? o.defects / N : 0;
+  sim.base = {E, R, N, T, C0, dr0, stops: o.losses.stops, shift: o.window.end - o.window.start};
+  if (E < 60) {
+    simBase.textContent = "기간이 막 시작돼서 계산할 데이터가 부족해요. '오늘'로 바꿔 보세요.";
+    simSliders.innerHTML = ""; return;
+  }
+  simBase.textContent = `실제 값: ${o.window.label} ${mins(E)} 중 라인 가동 ${mins(R)} · 검사 ${N}개 · 불량 ${o.defects}개`
+    + (N ? "" : " (검사 기록이 없어 목표 사이클로 계산)");
+  const r1 = v => Math.round(v * 10) / 10;
+  const cMin = r1(Math.max(0.5, Math.min(T, C0) * 0.6)), cMax = r1(Math.max(T, C0) * 1.5);
+  let h = `<div class="sim-row"><div class="top"><b>사이클 시간 (제품 1개)</b><span class="val" id="vC"></span></div>
+    <input type="range" id="inC" min="${cMin}" max="${cMax}" step="0.1" value="${r1(C0)}" aria-label="사이클 시간">
+    <div class="small muted">지금 실제 ${r1(C0)}초 · 목표 ${T}초</div></div>`;
+  sim.base.stops.forEach((s, i) => {
+    h += `<div class="sim-row"><div class="top"><b>${s.name} 줄이기</b><span class="val" id="vS${i}"></span></div>
+      <input type="range" id="inS${i}" min="0" max="100" step="5" value="0" aria-label="${s.name} 줄이기">
+      <div class="small muted">이 기간 ${s.count}회 · ${s.minutes.toFixed(1)}분</div></div>`;
+  });
+  if (!sim.base.stops.length) h += `<div class="sim-row small muted">이 기간에는 라인 정지가 없어서 정지 줄이기 항목이 없어요.</div>`;
+  const dMax = r1(Math.max(dr0 * 200, 5));
+  h += `<div class="sim-row"><div class="top"><b>불량률</b><span class="val" id="vD"></span></div>
+    <input type="range" id="inD" min="0" max="${dMax}" step="0.1" value="${r1(dr0 * 100)}" aria-label="불량률">
+    <div class="small muted">지금 ${(dr0 * 100).toFixed(1)}%</div></div>`;
+  simSliders.innerHTML = h;
+  simSliders.oninput = simCalc;
+  simCalc();
+}
+simReset.onclick = () => { if (sim.o) buildSim(); };
+
+function simModel(c, red, dr) {
+  const b = sim.base;
+  const R2 = Math.min(b.E, b.R + b.stops.reduce((a, s, i) => a + red[i] * s.minutes * 60, 0));
+  const N2 = R2 / c, A = R2 / b.E, P = Math.min(1, b.T / c), Q = 1 - dr;
+  return {R: R2, N: N2, good: N2 * Q, A, P, Q, O: A * P * Q};
+}
+
+function simCalc() {
+  const b = sim.base; if (!b || !$("inC")) return;
+  const c = +inC.value, dr = +inD.value / 100, zero = b.stops.map(() => 0);
+  const red = b.stops.map((s, i) => +$("inS" + i).value / 100);
+  const base = simModel(b.C0, zero, b.dr0), now = simModel(c, red, dr);
+  vC.innerHTML = `${b.C0.toFixed(1)} → <b>${c.toFixed(1)}초</b>`;
+  b.stops.forEach((s, i) => $("vS" + i).innerHTML = `${s.minutes.toFixed(0)}분 → <b>${(s.minutes * (1 - red[i])).toFixed(0)}분</b>`);
+  vD.innerHTML = `${(b.dr0 * 100).toFixed(1)} → <b>${(dr * 100).toFixed(1)}%</b>`;
+
+  const fmt = n => Math.round(n).toLocaleString();
+  kNowN.textContent = fmt(base.good); kNewN.textContent = fmt(now.good);
+  const dn = base.good > 0 ? (now.good / base.good - 1) * 100 : 0;
+  kDN.textContent = `${dn >= 0 ? "+" : ""}${dn.toFixed(0)}%`; kDN.className = "d c-" + (dn >= 0 ? "ok" : "bad");
+  kNowO.textContent = pctTxt(base.O); kNewO.textContent = pctTxt(now.O);
+  const dO = (now.O - base.O) * 100;
+  kDO.textContent = `${dO >= 0 ? "+" : ""}${dO.toFixed(1)}%p`; kDO.className = "d c-" + (dO >= 0 ? "ok" : "bad");
+  kShift.textContent = sim.kind === "shift" && b.E > 0
+    ? `교대 전체(${mins(b.shift)})로 보면 양품 약 ${fmt(base.good * b.shift / b.E)}개 → ${fmt(now.good * b.shift / b.E)}개` : "";
+
+  simApq.innerHTML = [["가동률", base.A, now.A], ["성능", base.P, now.P], ["품질", base.Q, now.Q]].map(([n, a, z]) =>
+    `<span>${n}</span><div class="bars"><div class="b cur" style="width:${(a * 85).toFixed(1)}%"><span>${pctTxt(a)}</span></div>
+     <div class="b new" style="width:${(z * 85).toFixed(1)}%"><span>${pctTxt(z)}</span></div></div>`).join("");
+
+  // 가장 효과 큰 조치: 하나씩만 바꿨을 때 OEE가 가장 많이 오르는 것
+  const cand = [["사이클 단축", simModel(c, zero, b.dr0).O]];
+  b.stops.forEach((s, i) => cand.push([`${s.name} 줄이기`, simModel(b.C0, zero.map((_, j) => j === i ? red[i] : 0), b.dr0).O]));
+  cand.push(["불량 줄이기", simModel(b.C0, zero, dr).O]);
+  const best = cand.map(([n, o]) => [n, o - base.O]).sort((x, y) => y[1] - x[1])[0];
+  simBest.textContent = best && best[1] > 0.0005 ? `가장 효과 큰 조치: ${best[0]} (OEE +${(best[1] * 100).toFixed(1)}%p)` : "";
+
+  sim.ghost = base.good > 0 ? clamp(Math.round((now.good / base.good - 1) * 10), 0, 4) : 0;
+  sim.worst = sim.o.worst;
+  simDecorate();
+}
+
+function simDecorate() {
+  if (mode !== "sim" || !sim.o) return;
+  const w = sim.o.worst;
+  TW.focus(w ? w.name : null);
+  if (w) TW.chip(w.name, `병목 · 가동률 ${(w.availability * 100).toFixed(0)}%`, "warn");
+  TW.ghosts(sim.ghost || 0);
+}
+
+// ======================================================================
+// ③ 사건 리플레이 — 저장된 상태 기록을 그 시각까지 되짚어 장면에 그림
+// ======================================================================
+const rp = {kind: "hour", d: null, t: null, playing: false, speed: 10, timer: null, geo: null, drag: false};
+const SEG_COLOR = {"가동": "#2A6B5C", "연동 정지": "#F5B544", "안전 정지": "#F0605D", "고장 정지": "#F0605D"};
+const MK_COLOR = {bad: "#F0605D", ok: "#3CC6A8", warn: "#F5B544", data: "#4CC3FF"};
+
+function loadReplay(keep = false) {
+  fetch(`/api/twin/replay?range=${rp.kind}`).then(r => r.json()).then(d => {
+    rp.d = d;
+    const {start, cur} = d.window;
+    if (!keep || rp.t == null || rp.t < start || rp.t > cur) {
+      const lastBad = d.markers.filter(m => m.tone === "bad").pop();
+      rp.t = lastBad ? Math.min(cur, lastBad.ts + 1) : Math.max(start, cur - 60);   // 가장 최근 정지 직후
+    }
+    drawTimeline(); showAt(rp.t);
+  }).catch(() => {});
+}
+setInterval(() => { if (mode === "replay" && !rp.playing && !rp.drag) loadReplay(true); }, 15000);
+rpRange.onclick = e => { const b = e.target.closest("[data-k]"); if (!b) return;
+  rp.kind = b.dataset.k; segOn(rpRange, "k", rp.kind); rpPause(); loadReplay(); };
+rpSpeed.onclick = e => { const b = e.target.closest("[data-s]"); if (!b) return;
+  rp.speed = +b.dataset.s; segOn(rpSpeed, "s", rp.speed); };
+
+function tickStep(span) {
+  const steps = [60, 300, 600, 900, 1800, 3600, 7200, 10800];
+  return steps.find(s => span / s <= 12) || 21600;
+}
+
+function drawTimeline() {
+  const d = rp.d; if (!d) return;
+  const svg = rpSvg, W = svg.clientWidth || 1000, L = 104, Rr = 14, top = 26, lh = 22, gap = 7;
+  const {start, cur} = d.window, span = Math.max(1, cur - start);
+  const X = t => L + (t - start) / span * (W - L - Rr);
+  rp.geo = {L, W, Rr, start, span};
+  const lanes = TW.names, yDef = top + lanes.length * (lh + gap), yMk = yDef + 26;
+  let s = "";
+  // 눈금
+  const st = tickStep(span);
+  for (let t = Math.ceil(start / st) * st; t <= cur; t += st) {
+    s += `<line x1="${X(t)}" y1="${top - 4}" x2="${X(t)}" y2="${yDef + 14}" stroke="#26323A"/>` +
+         `<text x="${X(t)}" y="14" text-anchor="middle" font-size="11" fill="#93A3AD" font-family="IBM Plex Mono">${hm(t)}</text>`;
+  }
+  // 설비별 상태 막대
+  lanes.forEach((n, i) => {
+    const y = top + i * (lh + gap);
+    s += `<text x="0" y="${y + 15}" font-size="13" fill="#C9D3D9">${n}</text>`;
+    (d.segments[n] || []).forEach(g => {
+      const x0 = X(Math.max(g.start, start)), x1 = X(Math.min(g.end, cur));
+      if (x1 - x0 > 0.2) s += `<rect x="${x0.toFixed(1)}" y="${y}" width="${(x1 - x0).toFixed(1)}" height="${lh}" rx="3" fill="${SEG_COLOR[g.status] || "#7F919C"}"/>`;
+    });
+  });
+  // 불량 검출 눈금
+  s += `<text x="0" y="${yDef + 12}" font-size="12" fill="#93A3AD">불량</text>`;
+  d.defects.forEach(f => s += `<rect x="${(X(f.ts) - 1.5).toFixed(1)}" y="${yDef + 2}" width="3" height="12" rx="1" fill="#F0605D"/>`);
+  // 사건 표식 (겹치는 글자는 생략)
+  let lastX = -1e9;
+  d.markers.forEach(m => {
+    const x = X(m.ts), c = MK_COLOR[m.tone];
+    const showLabel = x - lastX > 64; if (showLabel) lastX = x;
+    s += `<g class="mk" data-ts="${m.ts}"><title>${hm(m.ts)} ${esc(m.label)}</title><rect x="${x - 10}" y="${yMk - 4}" width="20" height="${showLabel ? 34 : 18}" fill="transparent"/>` +
+         `<path d="M${x} ${yMk} L${x + 7} ${yMk + 11} L${x - 7} ${yMk + 11} Z" fill="${c}"/>` +
+         (showLabel ? `<text x="${x}" y="${yMk + 26}" text-anchor="middle" font-size="11" fill="${c}">${esc(m.short)}</text>` : "") + `</g>`;
+  });
+  if (!d.markers.length && !d.defects.length)
+    s += `<text x="${L}" y="${yMk + 14}" font-size="12" fill="#93A3AD">이 기간에는 사건 기록이 없어요</text>`;
+  // 손잡이 (지금 보고 있는 시각)
+  const hx = X(clamp(rp.t, start, cur)), lx = clamp(hx, 34, W - 34);   // 시각 글자는 양 끝에서 잘리지 않게
+  s += `<g id="rpHandle"><line x1="${hx}" y1="${top - 6}" x2="${hx}" y2="${yDef + 16}" stroke="#4CC3FF" stroke-width="2"/>` +
+       `<rect x="${lx - 34}" y="0" width="68" height="20" rx="5" fill="#4CC3FF"/>` +
+       `<text x="${lx}" y="14" text-anchor="middle" font-size="12" font-weight="700" fill="#0E1317" font-family="IBM Plex Mono">${time(rp.t)}</text>` +
+       `<circle cx="${hx}" cy="${yDef + 16}" r="7" fill="#4CC3FF" stroke="#0E1317" stroke-width="3"/></g>`;
+  svg.setAttribute("height", yMk + 36);
+  svg.setAttribute("viewBox", `0 0 ${W} ${yMk + 36}`);
+  svg.innerHTML = s;
+}
+
+// 시간 막대 조작: 끌기 / 누르기 / 표식 누르기
+const tFromX = x => { const g = rp.geo; return g.start + clamp((x - g.L) / (g.W - g.L - g.Rr), 0, 1) * g.span; };
+const svgX = e => e.clientX - rpSvg.getBoundingClientRect().left;
+rpSvg.addEventListener("pointerdown", e => {
+  if (!rp.geo) return;
+  const mk = e.target.closest(".mk");
+  if (mk) { rpPause(); setT(+mk.dataset.ts - 2); return; }
+  rp.drag = true; rpSvg.setPointerCapture(e.pointerId); rpPause(); setT(tFromX(svgX(e)));
+});
+rpSvg.addEventListener("pointermove", e => { if (rp.drag) setT(tFromX(svgX(e))); });
+rpSvg.addEventListener("pointerup", () => { rp.drag = false; });
+window.addEventListener("resize", () => { if (mode === "replay") drawTimeline(); });
+
+function setT(t) {
+  const {start, cur} = rp.d.window;
+  rp.t = clamp(t, start, cur);
+  drawTimeline(); showAt(rp.t);
+}
+
+// t 시각의 설비 상태를 구간에서 찾아 장면에 그림
+function segAt(n, t) {
+  const ss = rp.d.segments[n] || [];
+  return ss.find(g => g.start <= t && t < g.end) || (ss.length && t >= ss[ss.length - 1].end ? ss[ss.length - 1] : null);
+}
+function showAt(t) {
+  if (!rp.d || t == null) return;
+  const eqs = TW.names.map(n => { const g = segAt(n, t);
+    return {name: n, status: g ? g.status : "가동", reason: g ? g.reason : "", updated: g ? g.start : t}; });
+  const press = eqs.find(e => e.name === "프레스 #1"), pg = segAt("프레스 #1", t);
+  const recentDefect = rp.d.defects.some(f => f.ts <= t && t - f.ts < 1.5);
+  const mods = {quality: {status: recentDefect ? "불량" : "대기"},
+                safety: press.status === "안전 정지" ? {zone_clear: !(pg && t - pg.start < 2), reason: press.reason, auto_release_in: null} : {}};
+  TW.apply(eqs, mods, selected);
+  TW.zone(mods.safety, press.status);
+
+  modeChip.textContent = `⏪ 과거 보기 · ${time(t)}`;
+  modeChip.className = "chipx c-data";
+  rpTime.textContent = time(t);
+  rpList.innerHTML = eqs.map(e => `<div><span>${e.name}</span><span class="c-${tone(e.status)}" style="font-weight:600">${shape(e.status)} ${esc(e.status)}</span></div>`).join("");
+
+  // 이 시각에 진행 중이던 사건
+  const inc = rp.d.incidents.find(i => i.start <= t + 0.5 && t <= (i.end ?? rp.d.window.cur));
+  if (inc) {
+    const cause = inc.steps.find(s => s.kind === "cause");
+    rpInc.className = "card t-bad";
+    rpInc.innerHTML = `<div class="small" style="color:var(--bad-tx)">이 순간 진행 중인 사건 #${inc.no}</div>
+      <div style="font-size:17px;font-weight:700;margin:4px 0 10px">${esc(cause ? cause.title : "")} → ${esc(inc.equipment)} ${esc(inc.status)}</div>
+      <ol class="steps">${inc.steps.map(s => `<li class="${s.ts > t + 0.5 ? "future" : ""}"><span class="tm">${time(s.ts)}</span><span>${esc(s.title)}${s.detail ? " · " + esc(s.detail) : ""}</span></li>`).join("")}</ol>
+      <div class="small muted" style="margin-top:8px">${inc.end ? `정지 ${mins(inc.end - inc.start)} 만에 복구` : "아직 복구 전"}</div>`;
+  } else {
+    const prev = rp.d.markers.filter(m => m.ts <= t).pop();
+    rpInc.className = "card";
+    rpInc.innerHTML = `<div style="font-weight:600">이 시각에는 진행 중인 사건이 없어요</div>
+      <div class="small muted" style="margin-top:4px">${prev ? `직전 기록: ${time(prev.ts)} ${esc(prev.label)}` : "이 기간 앞쪽에는 기록이 없어요"}</div>`;
+  }
+}
+
+// 재생: 0.1초마다 (배속 × 0.1초)씩 앞으로. 지나간 불량은 배출 레일 움직임으로 보여 줌
+function rpPlayToggle() { rp.playing ? rpPause() : rpPlay(); }
+function rpPlay() {
+  if (!rp.d) return;
+  if (rp.t >= rp.d.window.cur - 0.5) rp.t = rp.d.window.start;
+  rp.playing = true; rpPlay_.textContent = "⏸ 일시정지";
+  rp.timer = setInterval(() => {
+    const nt = rp.t + 0.1 * rp.speed, end = rp.d.window.cur;
+    rp.d.defects.filter(f => f.ts > rp.t && f.ts <= nt).slice(0, 3).forEach(f => TW.spawnDefect(f.type));
+    setT(nt);
+    if (nt >= end) rpPause();
+  }, 100);
+}
+function rpPause() { rp.playing = false; clearInterval(rp.timer); rpPlay_.textContent = "▶ 재생"; }
+const rpPlay_ = $("rpPlay");
+rpPlay_.onclick = rpPlayToggle;
+rpStart.onclick = () => { rpPause(); setT(rp.d.window.start); };
+rpPrev.onclick = () => { rpPause(); const m = rp.d.markers.filter(m => m.ts < rp.t - 3).pop(); if (m) setT(m.ts - 2); };
+rpNext.onclick = () => { rpPause(); const m = rp.d.markers.find(m => m.ts > rp.t + 2.5); if (m) setT(m.ts - 2); };
+
+INC.start();
+poll(render);
+
+// 관제 대시보드 공정 라인 아래 칸에서 왔으면 (/twin?eq=설비) 그 설비 메뉴를 바로 열어 줌
+{ const q = new URLSearchParams(location.search).get("eq"); if (q) setTimeout(() => select(q), 400); }
+</script>
+{% endblock %}
