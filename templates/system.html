@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% block head %}
+<style>
+/* 시스템 점검 (10/07 개편) — system_info.py */
+.sy-ready{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:18px;align-items:center}
+.sy-ready .big{font-family:var(--mono);font-size:34px;font-weight:700}
+.sy-rbar{height:10px;border-radius:999px;background:var(--line);overflow:hidden}.sy-rbar i{display:block;height:100%;background:linear-gradient(90deg,var(--ok),var(--warn));transition:width .4s}
+.sy-todo{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.sy-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;border:1px solid var(--line2);font-size:12px;color:var(--muted)}
+.sy-chip.ok{border-color:var(--ok-bd);color:var(--ok-tx);background:var(--ok-bg)}
+.sy-chip.warn{border-color:var(--warn-bd);color:var(--warn-tx);background:var(--warn-bg)}
+.sy-chip.fail{border-color:var(--bad-bd);color:var(--bad-tx);background:var(--bad-bg)}
+.sy-sec{font-size:12px;color:var(--muted);letter-spacing:.03em}
+.sy-host{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.sy-host .k{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--panel2);min-width:0}
+.sy-host .v{font-family:var(--mono);font-size:22px;font-weight:700}
+.sy-cams{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.sy-cam{border:1px solid var(--line);border-radius:12px;background:var(--panel2);overflow:hidden;display:flex;flex-direction:column;min-width:0}
+.sy-cam.fail{border-color:var(--bad-bd)}.sy-cam.warn{border-color:var(--warn-bd)}
+.sy-cam .th{position:relative;aspect-ratio:16/9;background:#10171b;overflow:hidden}
+.sy-cam .th img{width:100%;height:100%;object-fit:cover;display:block}
+.sy-cam .th .lb{position:absolute;left:8px;top:8px;background:rgba(0,0,0,.6);padding:2px 8px;border-radius:4px;font-weight:700;font-size:12px}
+.sy-cam .th .dm{position:absolute;right:8px;top:8px;background:#2A1E05;border:1px solid #C98A1B;color:#FFD58A;padding:1px 7px;border-radius:4px;font-size:11px}
+.sy-cam .bd{padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.sy-kv{display:grid;grid-template-columns:70px minmax(0,1fr);gap:4px 8px;font-size:12px}.sy-kv>span:nth-child(odd){color:var(--muted)}
+.sy-kv>span:nth-child(even){font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sy-m{display:grid;grid-template-columns:64px minmax(0,1fr) 68px;gap:8px;align-items:center;font-size:12px}
+.sy-m .bar{height:8px;border-radius:999px;background:var(--line);overflow:hidden}.sy-m .bar i{display:block;height:100%}
+.sy-m .mono{text-align:right}
+.sy-tip{font-size:12px;color:var(--warn-tx);line-height:1.5}
+.sy-idx{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+.sy-idx .c{border:1px solid var(--line2);border-radius:10px;overflow:hidden;background:var(--panel2);min-width:0}
+.sy-idx .c.use{border-color:var(--data)}.sy-idx .c.no{opacity:.45}
+.sy-idx .im{aspect-ratio:16/9;background:#121a1f;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:22px;color:#7d8d96;position:relative}
+.sy-idx .im img{width:100%;height:100%;object-fit:cover}
+.sy-idx .im .n{position:absolute;left:6px;top:4px;font-size:13px;color:#fff;text-shadow:0 1px 2px #000}
+.sy-idx .t{padding:6px 8px;font-size:11.5px;display:flex;flex-direction:column;gap:2px}
+.sy-roi{position:relative;aspect-ratio:16/9;border-radius:8px;background:#11181c;border:1px solid var(--line);overflow:hidden}
+.sy-roi img{position:absolute;inset:0;width:100%;height:100%;object-fit:fill;opacity:.75}
+.sy-roi i{position:absolute;border:2px solid;box-sizing:border-box}
+.sy-mods{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.sy-cls{display:inline-flex;gap:4px;align-items:center;font-size:12px;padding:3px 8px;border-radius:6px;border:1px solid var(--line2);font-family:var(--mono)}
+.sy-cls.use{border-color:var(--data);color:#BFE8FF}.sy-cls em{font-style:normal;font-family:inherit;color:var(--muted);font-size:11px}
+.sy-ck{display:grid;grid-template-columns:16px 132px minmax(0,1fr);gap:5px 8px;font-size:12.5px;align-items:start}
+.sy-ck .d{color:var(--muted);word-break:break-all}
+.sy-2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+.sy-25{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:16px}
+@media (max-width:1100px){.sy-cams,.sy-mods,.sy-2,.sy-25{grid-template-columns:minmax(0,1fr)}.sy-host{grid-template-columns:repeat(2,minmax(0,1fr))}.sy-idx{grid-template-columns:repeat(3,minmax(0,1fr))}}
+</style>
+{% endblock %}
+{% block body %}
+<div class="pg-head" style="justify-content:space-between">
+  <div style="display:flex;gap:12px;align-items:baseline;flex-wrap:wrap"><h1>시스템 점검</h1><span class="sub">카메라 · 모델 · 설정이 발표 준비가 됐는지 · 3초마다 갱신</span></div>
+  <div style="display:flex;gap:8px;align-items:center" id="totals"></div>
+</div>
+
+<section class="panel"><div class="sy-ready">
+  <div><div class="small muted">① 발표 준비</div><div class="big" id="rdN">-</div></div>
+  <div><div class="sy-rbar"><i id="rdBar" style="width:0"></i></div><div class="sy-todo" id="rdTodo"></div></div>
+  <div class="small muted" style="text-align:right">마지막 확인<br><span class="mono" id="rdT">-</span></div>
+</div></section>
+
+<div class="sy-sec">② 카메라 3대 동시 부하 — 안전 카메라는 항상 우선 (CPU가 모자라면 품질 → 게이트 순서로 분석 횟수를 줄임)</div>
+<section class="panel">
+  <div class="sy-host" id="host"></div>
+  <div class="sy-cams" id="cams"></div>
+  <div class="note small muted">분석 크기를 줄이려면 config.py CAMERAS의 해당 카메라에 <span class="mono">"imgsz": 480</span>을 추가하세요 (화면 해상도는 그대로, 추론만 빨라짐). 자동 조절 끄기: <span class="mono">AUTO_BALANCE = False</span></div>
+</section>
+
+<div class="sy-25">
+  <section class="panel"><div class="row"><h2>③ 카메라 번호 찾기</h2><button class="btn" id="scanBtn" onclick="scan()" style="min-height:36px">번호 찾기</button></div>
+    <div class="sy-idx" id="idx"><div class="small muted" style="grid-column:1/-1">버튼을 누르면 0~5번 카메라를 열어 보고 화면을 보여 줘요 (몇 초 걸려요 · 사용 중인 번호는 그 기능 화면)</div></div>
+    <div class="note small muted" id="rsNote">RealSense는 윈도우에 웹캠 2~3개(컬러 · 적외선)로도 잡혀서 웹캠 번호가 밀릴 수 있어요. 썸네일을 보고 맞는 번호를 config.py에 넣으세요.</div>
+  </section>
+  <section class="panel"><h2>④ 판정 구역 미리보기 <span class="small muted">최신 카메라 화면 위에 구역</span></h2>
+    <div class="sy-2" style="gap:10px">
+      <div><div class="sy-roi" id="roiS"></div><div class="small muted" id="roiSTxt" style="margin-top:4px"></div></div>
+      <div><div class="sy-roi" id="roiQ"></div><div class="small muted" id="roiQTxt" style="margin-top:4px"></div></div>
+    </div>
+    <div class="note small muted">구역 숫자는 config.py SAFETY_ROI · SAFETY_WARN_ROI · QUALITY_ROI (왼, 위, 오른, 아래 비율)</div>
+  </section>
+</div>
+
+<div class="sy-sec">⑤ 팀원 모듈 — 모델 클래스 이름 (파란 테두리 = 판정에 쓰는 이름, 대소문자 무시)</div>
+<div class="sy-mods" id="mods"></div>
+
+<div class="sy-2">
+  <section class="panel"><h2>⑥ 설정 · 데이터</h2><div class="sy-ck" id="cfg"></div><div class="small muted" id="dbInfo"></div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn" id="simClear" onclick="clearSim()">시뮬레이션 기록 지우기</button>
+      <span class="small muted">시연용 생산 시뮬레이터가 넣은 검사 기록만 지워요</span></div></section>
+  <section class="panel"><div class="row"><h2>설비 보전 AI 분류기</h2><button class="btn" id="clsBtn" onclick="testCls()">판정 시험</button></div>
+    <div class="sy-ck" id="clsBox"></div><div id="clsOut" class="small"></div></section>
+</div>
+
+<script>
+const NM = {gate: ["안전 게이트", "팀원1", "modules/gate.py REQUIRED"], quality: ["품질 검사", "팀원2", "modules/quality.py PRODUCT_CLASS · DEFECT_CLASSES"],
+            safety: ["프레스 안전", "팀원3", "modules/safety.py DANGER_CLASSES"]};
+const IC = {ok: '<span class="c-ok">●</span>', warn: '<span class="c-warn">▲</span>', fail: '<span class="c-bad">■</span>', skip: '<span class="muted">○</span>'};
+const WHERE = {gate: "게이트", quality: "품질", safety: "안전", config: "설정", host: "PC"};
+const row = c => `${IC[c.level]}<b>${esc(c.name)}</b><span class="d">${esc(c.detail)}</span>`;
+const col = (v, a, b, inv) => (inv ? v <= a : v >= a) ? "var(--ok)" : (inv ? v <= b : v >= b) ? "var(--warn)" : "var(--bad)";
+let last = null, tick = 0;
+function draw(d) {
+  last = d; tick++;
+  const all = d.modules.flatMap(m => m.checks).concat(d.config, d.host_checks);
+  const cnt = l => all.filter(c => c.level === l).length;
+  totals.innerHTML = `<span class="sy-chip ok">● 정상 ${cnt("ok")}</span><span class="sy-chip warn">▲ 주의 ${cnt("warn")}</span><span class="sy-chip fail">■ 문제 ${cnt("fail")}</span>
+    <button class="btn" style="min-height:34px" onclick="copyAll()">점검 결과 복사</button>`;
+  // ① 발표 준비
+  const R = d.ready;
+  rdN.textContent = `${R.ok} / ${R.total}`; rdN.style.color = R.ok === R.total ? "var(--ok-tx)" : "#FFD58A";
+  rdBar.style.width = pct(R.ok, R.total) + "%";
+  rdTodo.innerHTML = R.todo.length ? R.todo.map(t => `<span class="sy-chip ${t.level}">${IC[t.level]} ${esc(WHERE[t.where] || "")} · ${esc(t.name)} — ${esc(t.detail).slice(0, 60)}</span>`).join("")
+    : '<span class="sy-chip ok">● 모두 준비됐어요</span>';
+  rdT.textContent = time(d.time);
+  // ② 부하
+  const h = d.host, rs = d.modules.map(m => m.cam_info).find(i => i && i.usb);
+  host.innerHTML = `
+    <div class="k"><div class="small muted">CPU</div><div class="v" style="color:${h.cpu == null ? "var(--muted)" : col(h.cpu, 75, 92, true)}">${h.cpu == null ? "-" : Math.round(h.cpu) + "%"}</div><div class="small muted">${h.cores || "-"}코어 · YOLO ${d.modules.filter(m => m.model_loaded).length}개${h.psutil ? "" : " · psutil 없음"}</div></div>
+    <div class="k"><div class="small muted">메모리</div><div class="v">${h.mem_used ?? "-"}<span class="small muted"> / ${h.mem_total ?? "-"} GB</span></div><div class="small muted">서버 ${h.proc_mem ?? "-"} GB</div></div>
+    <div class="k"><div class="small muted">추론 장치</div><div class="v" style="font-size:18px">${esc(h.device)}</div><div class="small muted">${esc(h.device_note)}</div></div>
+    <div class="k"><div class="small muted">RealSense</div><div class="v" style="font-size:18px">${rs ? "USB " + esc(rs.usb) + (String(rs.usb).startsWith("3") ? " ✓" : " ▲") : d.realsense.used ? "연결 안 됨" : "안 씀"}</div>
+      <div class="small muted">${rs ? esc(rs.name) + " · " + rs.size.join("×") + "@" + rs.fps : d.realsense.version ? "pyrealsense2 " + esc(d.realsense.version) : "pyrealsense2 없음"}</div></div>`;
+  cams.innerHTML = d.modules.map(m => {
+    const i = m.cam_info || {}, cam = m.source !== "None" && m.camera_ok;
+    const src = String(m.source).toLowerCase().startsWith("realsense") ? (i.name || "RealSense") : /^\d+$/.test(m.source) ? "웹캠 " + m.source : m.source === "None" ? "꺼짐" : "영상 " + m.source;
+    const fpsW = pct(m.fps, m.target_fps), msW = pct(m.infer_ms, 150), lpW = pct(m.loop_ms, 400);
+    const chip = !cam ? `<span class="sy-chip">○ ${m.source === "None" ? "카메라 꺼짐 (source = None)" : "카메라 연결 안 됨"}</span>`
+      : m.load === "ok" ? '<span class="sy-chip ok">● 여유 있음</span>' : m.load === "warn" ? '<span class="sy-chip warn">▲ 조금 느림</span>' : '<span class="sy-chip fail">■ 느림</span>';
+    return `<div class="sy-cam ${cam ? m.load : ""}"><div class="th"><img alt="" src="/api/system/frame/${m.key}?t=${tick}" onerror="this.style.visibility='hidden'"><span class="lb">${m.key.toUpperCase()} · ${esc(src)}</span>${m.demo ? '<span class="dm">시연</span>' : ""}</div>
+      <div class="bd"><div class="sy-kv"><span>입력</span><span>${m.frame_wh ? m.frame_wh.join("×") : "-"}${i.fps ? " @" + i.fps : ""} → 분석 ${m.target_fps}fps${m.imgsz ? " · imgsz " + m.imgsz : ""}</span>
+        <span>모델</span><span title="${esc(m.model_path || "")}">${esc((m.model_path || "-").split(/[\\/]/).slice(-2).join("/"))} · ${m.model_classes.length || "?"}클래스</span></div>
+        <div class="sy-m"><span>분석 FPS</span><span class="bar"><i style="width:${fpsW}%;background:${col(m.fps, m.target_fps * .95, m.target_fps * .8)}"></i></span><span class="mono">${m.fps}/${m.target_fps}</span></div>
+        <div class="sy-m"><span>추론</span><span class="bar"><i style="width:${msW}%;background:${col(m.infer_ms, 80, 150, true)}"></i></span><span class="mono">${m.model_loaded ? Math.round(m.infer_ms) + " ms" : "더미"}</span></div>
+        <div class="sy-m"><span>한 바퀴</span><span class="bar"><i style="width:${lpW}%;background:${col(m.loop_ms, 120, 250, true)}"></i></span><span class="mono">${Math.round(m.loop_ms)} ms</span></div>
+        <div>${chip}${m.slow ? ` <span class="sy-chip warn">자동 조절 1/${m.slow + 1}</span>` : ""}</div>
+        ${m.tips.map(t => `<div class="sy-tip">▲ ${esc(t)}</div>`).join("")}</div></div>`;
+  }).join("");
+  // ④ 판정 구역
+  const box = (r, c) => `<i style="left:${r[0] * 100}%;top:${r[1] * 100}%;width:${(r[2] - r[0]) * 100}%;height:${(r[3] - r[1]) * 100}%;border-color:${c}"></i>`;
+  const f = a => a.map(v => (+v).toFixed(2)).join(", ");
+  roiS.innerHTML = `<img alt="" src="/api/system/frame/safety?t=${tick}" onerror="this.remove()">${box(d.roi.warn, "#F5B544")}${box(d.roi.safety, "#F0605D")}`;
+  roiQ.innerHTML = `<img alt="" src="/api/system/frame/quality?t=${tick}" onerror="this.remove()">${box(d.roi.quality, "#4CC3FF")}`;
+  const cen = r => [((r[0] + r[2]) / 2).toFixed(2), ((r[1] + r[3]) / 2).toFixed(2)];
+  roiSTxt.innerHTML = `안전: <span class="c-bad">위험 (${f(d.roi.safety)})</span> · <span class="c-warn">경고 (${f(d.roi.warn)})</span>`;
+  roiQTxt.innerHTML = `품질: <span style="color:#9FD8F5">(${f(d.roi.quality)})</span> · 중심 ${cen(d.roi.quality).join(", ")}${cen(d.roi.quality).join() === "0.50,0.50" ? " ✓" : ""}`;
+  // ⑤ 모듈
+  mods.innerHTML = d.modules.map(m => {
+    const [nm, who, where] = NM[m.key] || [m.key, "", ""], n = Object.keys(m.names).length, got = n - m.missing.length;
+    const bad = m.checks.some(c => c.level === "fail");
+    return `<section class="panel" style="${bad ? "border-color:var(--bad-bd)" : ""}"><div class="row"><h2>${nm} <span class="small muted">${who}</span></h2>
+      ${m.model_loaded ? `<span class="sy-chip ${m.missing.length ? "fail" : "ok"}">${m.missing.length ? "■" : "●"} ${got}/${n} 일치</span>` : '<span class="sy-chip">○ 모델 없음</span>'}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">${m.chips.map(c => `<span class="sy-cls ${c.use ? "use" : ""}">${esc(c.name)}${c.kr ? `<em>${esc(c.kr)}</em>` : ""}</span>`).join("")}</div>
+      ${!m.model_loaded ? '<div class="small muted">모델을 못 불러와서 판정에 쓰는 이름만 보여요</div>' : ""}
+      <div class="sy-ck">${m.checks.map(row).join("")}</div>
+      ${m.missing.length ? `<div class="small c-bad">모델에 없는 이름: <b>${m.missing.map(esc).join(", ")}</b> → ${where}를 모델 클래스 이름과 맞추세요</div>` : ""}
+      ${m.last_error ? `<div class="small c-bad">최근 오류: ${esc(m.last_error)}</div>` : ""}</section>`;
+  }).join("");
+  // ⑥ 설정 · 분류기
+  cfg.innerHTML = d.config.map(row).join("");
+  dbInfo.textContent = `DB ${d.db.path}${d.db.size_mb != null ? " · " + d.db.size_mb + " MB" : ""} · 검사 ${d.db.counts.inspections.toLocaleString()} · 이벤트 ${d.db.counts.events.toLocaleString()} · 정비 요청 ${d.db.counts.tickets} · 피드백 ${d.db.counts.feedback}`;
+  const c = d.classifier;
+  clsBox.innerHTML = row({name: "상태", level: c.state === "loaded" ? "ok" : c.state === "dummy" ? "fail" : "warn",
+      detail: {loaded: `v5 분류기 불러옴${c.load_sec != null ? " · " + c.load_sec + "초" : ""}`, dummy: "더미 분류기 사용 중 (모든 판정이 정기 점검)",
+               not_loaded: "불러오는 중 (서버 시작 때 미리 불러옴)"}[c.state] || c.state})
+    + row({name: "모델 위치", level: c.source === "web" ? "ok" : c.source === "em_model" ? "warn" : c.state === "dummy" ? "fail" : "skip",
+           detail: c.source === "web" ? `web 폴더 · ${c.path}${c.klue_offline ? " · 인터넷 없이 동작" : ""}` : c.source === "em_model" ? `학습 폴더 ${c.path} (web 폴더로 복사 추천)` : c.path})
+    + (c.models ? row({name: "조합", level: "ok", detail: Object.entries(c.models).map(([k, v]) => `${k} ${v.weight} (${v.sec}초)`).join(" · ")}) : "")
+    + (c.web_error ? row({name: "web 모델 오류", level: "warn", detail: c.web_error}) : "")
+    + (c.error ? row({name: "오류", level: "fail", detail: c.error}) : "");
+}
+function scan() {
+  scanBtn.disabled = true; scanBtn.textContent = "찾는 중...";
+  fetch("/api/system/scan-cameras", {method: "POST"}).then(r => r.json()).then(r => {
+    scanBtn.disabled = false; scanBtn.textContent = "다시 찾기";
+    const NMK = {gate: "GATE", quality: "QUALITY", safety: "SAFETY"};
+    idx.innerHTML = r.cams.map(c => `<div class="c ${c.use ? "use" : c.ok ? "" : "no"}"><div class="im">${c.thumb ? `<img src="${c.thumb}" alt="">` : ""}<span class="n">${c.i}</span></div>
+      <div class="t"><b>${c.size ? c.size.join("×") + (c.gray ? " 흑백" : "") : "없음"}</b>
+      <span class="${c.use ? "c-ok" : c.gray ? "c-warn" : "muted"}">${c.use ? NMK[c.use] + "가 사용 중" : c.gray ? "흑백 → RealSense 적외선일 수 있음" : c.ok ? "사용 가능" : esc(c.note || "-")}</span></div></div>`).join("");
+  }).catch(() => { scanBtn.disabled = false; scanBtn.textContent = "번호 찾기"; });
+}
+function copyAll() {
+  if (!last) return;
+  const mk = {ok: "●", warn: "▲", fail: "■", skip: "○"};
+  const L = [`[SMART LINE 시스템 점검] ${new Date().toLocaleString()} · 발표 준비 ${last.ready.ok}/${last.ready.total}`];
+  last.modules.forEach(m => { L.push(`\n■ ${(NM[m.key] || [m.key])[0]} (source=${m.source}) FPS ${m.fps}/${m.target_fps} · 추론 ${Math.round(m.infer_ms)}ms`);
+    m.checks.forEach(c => L.push(` ${mk[c.level]} ${c.name}: ${c.detail}`)); m.tips.forEach(t => L.push(`   → ${t}`)); });
+  L.push("\n■ 설정 · 데이터"); last.config.forEach(c => L.push(` ${mk[c.level]} ${c.name}: ${c.detail}`));
+  const t = L.join("\n");
+  (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => alert("복사했어요 (메신저에 붙여넣기)"))
+    .catch(() => { const a = document.createElement("textarea"); a.value = t; document.body.appendChild(a); a.select(); document.execCommand("copy"); a.remove(); alert("복사했어요"); });
+}
+function testCls() {
+  clsBtn.disabled = true; clsBtn.textContent = "판정 중... (처음엔 수십 초)";
+  fetch("/api/system/classifier-test", {method: "POST"}).then(r => r.json()).then(r => {
+    clsBtn.disabled = false; clsBtn.textContent = "판정 시험";
+    clsOut.innerHTML = `"프레스 바닥에 기름이 고여서 미끄러워요" → <b>${esc(r.result.type_name)} · ${esc(r.result.urgency_name || r.result.urgency)}</b> (${r.elapsed}초)
+      ${r.result.urgency === "상" ? '<span class="c-ok">● 정상</span>' : '<span class="c-bad">■ 즉시 조치가 나와야 정상</span>'}`; load(); });
+}
+function clearSim() {
+  if (!confirm("시뮬레이션으로 만든 검사 기록을 모두 지울까요? (생산 관리 · OEE 숫자가 그만큼 줄어요)")) return;
+  fetch("/api/system/clear-sim", {method: "POST"}).then(r => r.json()).then(r => { alert(`${r.deleted}개 지웠어요`); load(); });
+}
+const load = () => fetch("/api/system").then(r => r.json()).then(draw).catch(e => console.error(e));
+load(); setInterval(load, 3000);
+poll(() => {});
+</script>
+{% endblock %}
