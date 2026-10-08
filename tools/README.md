@@ -9,3 +9,4 @@
 | export_maint_model.py | 설비보전 모델을 smartline-models에서 model_files/maintenance로 복사 · 검증 |
 | make_pyproject.py | 지금 환경의 라이브러리 버전으로 pyproject 고정 |
 | pack_web.py | 다른 PC로 옮길 압축 파일 만들기 |
+| seed_demo_data.py | 시연용 과거 기록(평일 7일) 넣은 새 DB 만들기 — OEE 추이 · 정비 지표 · 안전 기록이 채워짐 |
