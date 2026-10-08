@@ -1,0 +1,25 @@
+# 가상환경 · 캐시
+.venv/
+__pycache__/
+*.py[oc]
+.DS_Store
+*.code-workspace
+
+# PC별 설정 (config_local.example.py를 복사해서 사용)
+config_local.py
+
+# 실행 중 생기는 기록 · 사진
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+safety_snaps/*
+!safety_snaps/.gitkeep
+defect_images/
+*.zip
+
+# 모델 가중치 (아직 최종 아님 · 크기 큼) → model_files/README.md 참고
+model_files/**/*.pt
+model_files/**/*.onnx
+model_files/maintenance/*
+!model_files/maintenance/README.md
