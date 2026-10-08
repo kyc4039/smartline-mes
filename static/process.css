@@ -1,0 +1,19 @@
+/* 공정 라인 애니메이션 (v2 다크): 설비 그룹에 stop 클래스가 붙으면 멈춤 */
+@keyframes ram{0%,100%{transform:translateY(0)}50%{transform:translateY(34px)}}
+@keyframes shake{0%,100%{transform:translateX(0)}50%{transform:translateX(2px)}}
+@keyframes belt{to{stroke-dashoffset:-18}}
+@keyframes move{from{transform:translateX(0)}to{transform:translateX(990px)}}
+@keyframes scan{0%,100%{opacity:.1}50%{opacity:.45}}
+@keyframes arm{0%,100%{transform:rotate(-22deg)}50%{transform:rotate(20deg)}}
+@keyframes blink{50%{opacity:.25}}
+.a-ram{animation:ram 1.2s ease-in-out infinite}
+.a-shake{animation:shake .2s linear infinite}
+.a-belt{animation:belt .6s linear infinite}
+.a-move{animation:move 9s linear infinite}
+.a-scan{animation:scan 1.2s ease-in-out infinite}
+.a-arm{animation:arm 2.6s ease-in-out infinite;transform-box:view-box;transform-origin:960px 160px}
+.eq.stop .anim{animation-play-state:paused}
+.eq.stop .lamp,.eq.stop .halo{animation:blink .8s step-end infinite}
+.lamp.ok{fill:var(--ok)}.lamp.bad{fill:var(--bad)}.lamp.warn{fill:var(--warn)}
+.halo{opacity:.25}.halo.ok{fill:var(--ok)}.halo.bad{fill:var(--bad)}.halo.warn{fill:var(--warn)}
+#pressAlarm{display:none}#eq-press.stop #pressAlarm{display:inline}
