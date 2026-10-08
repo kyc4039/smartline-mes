@@ -1,0 +1,331 @@
+{% extends "base.html" %}
+{% block head %}
+<style>
+/* 품질 관리 페이지 */
+.qbar{height:8px;border-radius:4px;background:#26323A;overflow:hidden}.qbar i{display:block;height:100%}
+.top2{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:16px;align-items:stretch}
+.rcol{display:flex;flex-direction:column;gap:12px;min-width:0}
+.camwrap{position:relative}
+.cam-ov{position:absolute;left:12px;bottom:12px;right:12px;display:flex;justify-content:space-between;align-items:flex-end;pointer-events:none}
+.cam-ov .tag{background:rgba(14,19,23,.85);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-weight:700;font-size:17px}
+.strip2{display:grid;grid-template-columns:repeat(30,1fr);gap:3px}.strip2 i{height:18px;border-radius:3px;background:#26323A}
+.strip2 i.ok{background:#2B6E5B}.strip2 i.ng{background:#F0605D}
+.verdict{border-radius:16px;padding:16px 18px;display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:center;border:1px solid var(--line);background:var(--panel)}
+.verdict.bad{background:linear-gradient(135deg,#3A1416,#22161A);border-color:#7A2A2A}
+.verdict.ok{background:linear-gradient(135deg,#10302A,#151C21);border-color:var(--ok-bd)}
+.kv2{display:grid;grid-template-columns:84px 1fr;gap:7px 10px;font-size:13px;align-items:center}.kv2 .k{color:var(--muted);font-size:12px}
+.k3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.k3>div{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;min-width:0}
+.k3 .v{font-family:var(--mono);font-size:24px;font-weight:600}
+.mini{font-size:11px;color:var(--muted)}
+.leg{display:flex;gap:12px;font-size:12px;color:var(--muted);flex-wrap:wrap}.leg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.g3{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,.85fr);gap:16px}
+.g2h{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:16px}
+.qt{width:100%;border-collapse:collapse;font-size:13px}.qt th{text-align:left;color:var(--muted);font-weight:500;font-size:12px;padding:7px 8px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel);z-index:1}
+.qt td{padding:8px;border-bottom:1px solid var(--line);cursor:pointer}.qt tr.sel td{background:#0F2A38}.qt tr:hover td{background:var(--panel2)}.qt .r{text-align:right}
+.qscroll{max-height:440px;overflow:auto}
+.chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}.chips button,.chips a{font:inherit;font-size:12px;padding:4px 11px;border-radius:14px;border:1px solid var(--line);background:transparent;color:var(--text);cursor:pointer;text-decoration:none}
+.chips button.on{background:#0F2A38;border-color:#2A6B8E;color:#A8E2FF}
+.chips select{width:auto!important;min-height:0!important;height:28px;font:inherit;font-size:12px;background:transparent;color:var(--text);border:1px solid var(--line);border-radius:14px;padding:0 8px}
+.causebox{background:var(--panel2);border-radius:10px;padding:10px 12px;border-left:4px solid}
+.step{display:grid;grid-template-columns:repeat(4,1fr);position:relative;margin:4px 0 2px}
+.step>div{text-align:center;font-size:12px;color:var(--muted);position:relative}
+.step .dot{width:26px;height:26px;border-radius:50%;margin:0 auto 6px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;background:#26323A;color:#93A3AD;position:relative;z-index:1}
+.step .done .dot{background:#3CC6A8;color:#0E1317}.step .now .dot{background:#F5B544;color:#2A1F08;box-shadow:0 0 0 4px rgba(245,181,68,.25)}
+.step .done{color:var(--ok-tx)}.step .now{color:#FFD58A;font-weight:600}
+.step::before{content:"";position:absolute;left:12%;right:12%;top:13px;height:2px;background:#26323A}
+.badge.t-data2{background:#0F2A38;border-color:#2A6B8E;color:#A8E2FF}
+@media (max-width:1200px){.top2,.g3,.g2h{grid-template-columns:minmax(0,1fr)}}
+</style>
+{% endblock %}
+{% block body %}
+<div class="pg-head">
+  <h1>품질 관리 · AI 비전 검사</h1>
+  <span class="sub">AI 판정 → 불량 자동 격리 → 사람 확인(불량 확인 · 오판 · 정비 요청) → 재학습</span>
+  <div class="right"><a class="pg-chip" href="/api/quality/false.csv" title="오판(실제 정상품)으로 표시한 검사 → 모델 재학습용">⬇ 오판 목록 CSV</a></div>
+</div>
+
+<!-- ① 생산 정보: 카드 4장 (제품 · 이번 LOT · LOT 진행 · 오늘 진행) -->
+<section class="kgrid4" aria-label="생산 정보">
+  <div class="icard"><div class="ic" style="background:#1B2A33"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#A8E2FF" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M5 5h14l-2 15H7z"/><path d="M4.5 5h15" stroke-width="2.4"/></svg></div>
+    <div class="it"><div class="small muted">제품 · 작업지시</div><div class="iv" id="iProd">-</div><div class="mono small muted" id="iWo">-</div></div></div>
+  <div class="icard"><div class="ic" style="background:#16302A"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#7FE3C8" stroke-width="1.8" aria-hidden="true"><rect x="3" y="7" width="13" height="10" rx="1"/><path d="M16 10h3l2 3v4h-5"/><circle cx="7" cy="18" r="2"/><circle cx="18" cy="18" r="2"/></svg></div>
+    <div class="it"><div class="small muted">이번 LOT (트럭)</div><div class="iv mono" id="iLot" title="">-</div><div class="small muted" id="iWhere">-</div></div></div>
+  <div class="icard"><svg class="iring" width="64" height="64" viewBox="0 0 64 64" id="rLot"></svg>
+    <div class="it"><div class="small muted">이번 LOT 양품</div><div class="iv mono" id="iLotCnt">-</div><div class="small c-warn" id="iEta"></div></div></div>
+  <div class="icard"><svg class="iring" width="64" height="64" viewBox="0 0 64 64" id="rDay"></svg>
+    <div class="it"><div class="small muted" id="iDayLbl">오늘 생산 / 계획</div><div class="iv mono" id="iToday">-</div><div class="small" id="iGap"></div></div></div>
+</section>
+
+<!-- 카메라 (크게) + 오른쪽 열 (카메라와 같은 높이) -->
+<div class="top2">
+  <section class="panel" aria-label="검사 카메라" style="gap:10px">
+    <div class="row"><h2>CAM 2 · 검사 스테이션</h2><span class="small muted mono">판정 구역 · 결함 {{ hold_sec }} s 이상이면 불량</span></div>
+    <div class="cam camwrap" style="aspect-ratio:16/10">
+      <img src="/quality/video" alt="검사 스테이션 카메라">
+      <span class="lb"><span class="c-bad">●</span> LIVE</span>
+      <div class="cam-ov"><span class="tag" id="camTag">대기</span><span class="mini tag" style="font-size:11px;font-weight:500" id="camSub"></span></div>
+    </div>
+    <div><div class="row small muted" style="margin-bottom:6px"><span>최근 30개 판정</span><span>왼쪽이 최신 · <span class="c-bad">■</span> 불량</span></div>
+      <div class="strip2" id="strip"></div></div>
+  </section>
+
+  <div class="rcol">
+    <!-- 현재 판정 + AI 판정 상세 (가장 최근 판정) -->
+    <section class="verdict" id="vCard" aria-live="polite"><div class="muted small">아직 판정 기록이 없어요</div></section>
+    <!-- KPI -->
+    <section class="k3">
+      <div><span class="small muted">검사 (오늘)</span><div class="v" id="kTotal">-</div><span class="mini" id="kGood"></span></div>
+      <div><span class="small muted">불량</span><div class="v c-bad" id="kBad">-</div><span class="mini" id="kPend"></span></div>
+      <div><span class="small muted">불량률 (최근 50개)</span><div class="v" id="kRate">-</div><span class="mini" id="kRateSub"></span></div>
+    </section>
+    <section id="alertBox" class="state t-warn" role="alert" style="display:none;padding:12px 16px">
+      <div style="font-size:14px;font-weight:700" id="alertText"></div>
+      <a class="btn warn" href="/maintenance" style="align-self:flex-start;min-height:32px">정비 요청 작성</a>
+    </section>
+    <!-- 불량 위치 지도 -->
+    <section class="panel" aria-label="불량 위치" style="flex-grow:1;gap:8px">
+      <div class="row"><h2 style="font-size:16px">불량이 어디서 나오나 <span class="small muted">오늘 · 판정 구역 위 위치</span></h2><span class="leg" id="heatLeg"></span></div>
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 150px;gap:12px;align-items:center;flex-grow:1">
+        <svg id="heat" viewBox="0 0 320 220" style="width:100%" role="img" aria-label="불량 위치 지도"></svg>
+        <div id="hotList" style="display:flex;flex-direction:column;gap:8px;font-size:12px"></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- p 관리도 · 파레토 · 추정 원인 -->
+<div class="g3">
+  <section class="panel" aria-label="불량률 관리도">
+    <div class="row"><h2>불량률 관리도 <span class="small muted">시간별 · p 관리도</span></h2>
+      <span class="leg"><span><i style="background:#4CC3FF"></i>불량률</span><span><i style="background:#F5B544;height:2px"></i>기준</span><span><i style="background:#F0605D;height:2px"></i>관리 한계(UCL)</span></span></div>
+    <div id="pchart"></div>
+    <div class="small muted" id="pNote"></div>
+  </section>
+  <section class="panel" aria-label="불량 유형 파레토">
+    <h2>불량 유형 파레토 <span class="small muted">오늘</span></h2>
+    <div id="pareto"></div>
+    <div class="small muted" id="parNote"></div>
+  </section>
+  <section class="panel" aria-label="추정 원인">
+    <h2>추정 원인 · 점검</h2>
+    <div id="causes" style="display:flex;flex-direction:column;gap:8px;font-size:13px"></div>
+    <div class="small muted">추정 원인은 AI 판단이 아닌 유형별 점검표예요 (quality_info.py에서 고쳐 쓰기)</div>
+  </section>
+</div>
+
+<!-- 검사 이력 · 불량 확인 -->
+<div class="g2h">
+  <section class="panel" aria-label="검사 이력">
+    <div class="row"><h2>검사 이력 <span class="small muted" id="hCount"></span></h2>
+      <div class="chips" id="hFilter">
+        <button data-f="all">전체</button><button data-f="bad" class="on">불량만</button><button data-f="pending">확인 대기</button>
+        <select id="hLot"><option value="">모든 LOT</option></select>
+        <a href="/api/quality/false.csv" title="오판(실제 정상품)으로 표시한 검사 → 팀원2 모델 재학습용">⬇ 오판 목록 (재학습용)</a>
+      </div></div>
+    <div class="qscroll"><table class="qt"><thead><tr><th>검사 ID</th><th>시각</th><th>LOT</th><th>판정</th><th>유형</th><th style="width:130px">신뢰도</th><th>위치</th><th>처리</th></tr></thead>
+      <tbody id="hRows"><tr><td colspan="8" class="muted">불러오는 중…</td></tr></tbody></table></div>
+  </section>
+  <section class="panel" aria-label="불량 확인" id="dispBox"></section>
+</div>
+
+<script>
+const HOLD = {{ hold_sec|tojson }}, LIMIT = {{ rate_limit|tojson }};
+const TYPE_COL = {marked_can: "#F0605D", crushed_can: "#B07CFF", scratch: "#F0605D", wrinkled: "#B07CFF"}, tcol = t => TYPE_COL[t] || "#F5B544";
+const n = v => v == null ? "-" : Math.round(v).toLocaleString();
+const confTxt = v => v == null ? "-" : v.toFixed(2);
+const DISP = {"자동 격리": ["t-warn", "확인 대기"], "불량 확인": ["t-bad", "불량 확인"], "오판 · 정상품": ["t-idle", "오판 · 정상품"], "정비 요청": ["t-data2", "정비 요청"]};
+const dispBadge = r => r.result !== "불량" ? '<span class="muted">-</span>'
+  : r.disposition ? `<span class="badge ${(DISP[r.disposition] || ["t-idle"])[0]}">${esc((DISP[r.disposition] || [0, r.disposition])[1])}</span>` : '<span class="muted small">기록 없음</span>';
+
+// ---- 실시간 (1초): 카메라 위 판정 띠 · 불량률 알림 ----
+function render(d) {
+  const q = d.modules.quality || {}, a = d.modules.alerts || {};
+  const st = q.status || "대기";
+  camTag.textContent = st === "불량" ? `■ NG · ${q.defect_type || ""}` : st === "정상" ? "● OK" : st === "검사 중" ? "▲ 검사 중" : "○ 대기";
+  camTag.style.color = st === "불량" ? "#FFB3B0" : st === "정상" ? "#7FE3C8" : st === "검사 중" ? "#FFD58A" : "#93A3AD";
+  camTag.style.borderColor = st === "불량" ? "#7A2A2A" : "var(--line)";
+  camSub.textContent = st === "검사 중" ? `결함 누적 ${(q.defect_seconds || 0).toFixed(1)} / ${HOLD} s` : st === "대기" ? "판정 구역에 제품을 놓아 주세요" : "판정 구역 안";
+  alertBox.style.display = a.maintenance_needed ? "flex" : "none";
+  alertText.textContent = "▲ " + (a.message || "");
+  if (q.total !== lastTotal) { lastTotal = q.total; loadInfo(); }     // 새 판정이 나오면 바로 갱신
+}
+
+// ---- 품질 상세 (/api/quality/info): 3초마다 + 새 판정이 나올 때 ----
+let Q = null, hFilt = "bad", hLotSel = "", pick = null, lastTotal = null;
+const preLot = new URLSearchParams(location.search).get("lot");     // 생산 관리 'LOT 검사 이력 →'
+if (preLot) { hLotSel = preLot; hFilt = "all"; document.querySelectorAll("#hFilter button").forEach(b => b.classList.toggle("on", b.dataset.f === "all")); }
+
+function loadInfo() {
+  fetch(`/api/quality/info?filter=${hFilt}&lot=${encodeURIComponent(hLotSel)}`).then(r => r.json()).then(d => { Q = d; drawAll(); }).catch(() => {});
+}
+function drawAll() { drawInfo(); drawVerdict(); drawKpi(); drawHeat(); drawP(); drawPareto(); drawCauses(); drawRows(); drawDisp(); }
+
+// 원형 진행 게이지 (64px)
+const ring = (p, col) => { const C = 2 * Math.PI * 26, v = Math.max(0, Math.min(1, p || 0));
+  return `<circle cx="32" cy="32" r="26" fill="none" stroke="#26323A" stroke-width="8"/>
+    <circle cx="32" cy="32" r="26" fill="none" stroke="${col}" stroke-width="8" stroke-linecap="round" stroke-dasharray="${v * C} ${C}" transform="rotate(-90 32 32)"/>
+    <text x="32" y="37" text-anchor="middle" font-size="14" font-weight="700" fill="#E7EDF0" font-family="IBM Plex Mono, monospace">${Math.round(v * 100)}%</text>`; };
+const ms2 = s => { s = Math.max(0, Math.round(s || 0)); return s >= 60 ? `약 ${Math.round(s / 60)}분` : `약 ${s}초`; };
+function drawInfo() {
+  const I = Q.info;
+  iProd.textContent = I.product; iWo.textContent = I.work_order;
+  iLot.textContent = "…-" + I.lot.split("-")[1]; iLot.title = "LOT " + I.lot;
+  iWhere.textContent = `${I.line} · ${I.equipment.replace("④ 비전 검사기 · ", "④ 비전 ")}`;
+  rLot.innerHTML = ring(I.lot_good / I.lot_target, "#F5B544");
+  iLotCnt.innerHTML = `${I.lot_good}<span class="small muted"> / ${I.lot_target}</span>`;
+  iEta.textContent = I.eta_sec != null ? `출발까지 ${ms2(I.eta_sec)}` + (I.left_pallets != null ? ` · ${I.left_pallets}팔레트` : "") : "";
+  const gap = I.plan_expected ? I.plan_done / I.plan_expected - 1 : 0, ahead = gap >= -0.05;
+  rDay.innerHTML = ring(I.plan_target ? I.plan_done / I.plan_target : 0, ahead ? "#3CC6A8" : "#F0605D");
+  iDayLbl.textContent = "오늘 생산 / 계획 " + (I.plan_label || "").replace("이번 교대 ", "");
+  iToday.innerHTML = `${n(I.plan_done)}<span class="small muted"> / ${n(I.plan_target)}</span>`;
+  iGap.innerHTML = (I.plan_expected ? `<span class="${ahead ? "c-ok" : "c-bad"}">계획보다 ${gap >= 0 ? "+" : ""}${Math.round(gap * 100)}%</span>` : `<span class="muted">계획 시간 전</span>`) +
+    (I.sim ? ` <span class="muted">· 시뮬레이션</span>` : "");
+  strip.innerHTML = Array.from({length: 30}, (_, i) => i < Q.recent.length ? `<i class="${Q.recent[i] ? "ng" : "ok"}"></i>` : "<i></i>").join("");
+}
+
+// 현재 판정 + AI 상세 (신뢰도 원형 게이지)
+function drawVerdict() {
+  const r = Q.last; if (!r) return;
+  const bad = r.result === "불량", c = r.conf || 0, col = bad ? "#F0605D" : "#3CC6A8";
+  vCard.className = "verdict " + (bad ? "bad" : "ok");
+  vCard.innerHTML = `
+    <svg width="96" height="96" viewBox="0 0 100 100"><circle cx="50" cy="50" r="42" fill="none" stroke="${bad ? "#3A2226" : "#173A32"}" stroke-width="10"/>
+      <circle cx="50" cy="50" r="42" fill="none" stroke="${col}" stroke-width="10" stroke-linecap="round" stroke-dasharray="${c * 264} 264" transform="rotate(-90 50 50)"/>
+      <text x="50" y="53" text-anchor="middle" font-size="22" font-weight="700" fill="#E7EDF0" font-family="IBM Plex Mono, monospace">${confTxt(r.conf)}</text>
+      <text x="50" y="69" text-anchor="middle" font-size="10" fill="${bad ? "#FFB3B0" : "#7FE3C8"}">${bad ? "결함 신뢰도" : "제품 확신도"}</text></svg>
+    <div style="min-width:0"><div class="small" style="color:${bad ? "#FFB3B0" : "#7FE3C8"}">최근 판정 · 검사 #${r.id} · ${time(r.ts)}${r.source === "sim" ? " · 시뮬레이션" : ""}</div>
+      <div style="font-size:28px;font-weight:700;color:${bad ? "#FFE1DF" : "#C9F3E6"}">${bad ? `■ 불량 · ${esc(r.types.join(", "))} <span style="font-size:15px;font-weight:500">(${esc(r.type_kr)})</span>` : "● 정상"}</div>
+      <div class="kv2" style="margin-top:8px">
+        <span class="k">검출 위치</span><span>${bad && r.where ? `판정 구역 <b>${esc(r.where)}</b>` : '<span class="muted">-</span>'}</span>
+        <span class="k">판정 시간</span><span class="mono">${r.judge_sec == null ? "-" : r.judge_sec.toFixed(2) + " s"} <span class="mini">(${bad ? `결함 누적 ${HOLD} s 도달` : "결함 없이 확인"})</span></span>
+        <span class="k">사용 모델</span><span class="mono">${esc(r.model || "-")}</span></div></div>`;
+}
+
+function drawKpi() {
+  const t = Q.today;
+  kTotal.textContent = n(t.total); kGood.textContent = `양품 ${n(t.good)}`;
+  kBad.textContent = n(t.defects); kPend.innerHTML = `확인 대기 <b class="${t.pending ? "c-warn" : ""}">${t.pending}</b> · 오판 ${t.false}`;
+  kRate.textContent = pctTxt(t.rate50); kRate.className = "v " + (t.ucl50 != null && t.rate50 > t.ucl50 ? "c-bad" : t.rate50 > LIMIT ? "c-warn" : "c-ok");
+  kRateSub.textContent = `기준 ${pctTxt(LIMIT)}` + (t.ucl50 != null ? ` · 관리 한계 ${pctTxt(t.ucl50)}` : "");
+}
+
+// 불량 위치 지도 (판정 구역 = 사각형, 점 = 불량 위치, 많은 칸은 진하게)
+function drawHeat() {
+  const H = Q.heat, X = v => 10 + v * 300, Y = v => 10 + v * 200;
+  let s = `<rect x="10" y="10" width="300" height="200" rx="6" fill="#151C21" stroke="#3A4852"/>`;
+  for (let i = 1; i < 3; i++) s += `<line x1="${X(i / 3)}" y1="10" x2="${X(i / 3)}" y2="210" stroke="#26323A" stroke-dasharray="4 4"/><line x1="10" y1="${Y(i / 3)}" x2="310" y2="${Y(i / 3)}" stroke="#26323A" stroke-dasharray="4 4"/>`;
+  H.hot.forEach((h, k) => s += `<rect x="${X(h.col / 3)}" y="${Y(h.row / 3)}" width="100" height="66.7" fill="${tcol(h.type)}" opacity="${[.3, .18, .1][k]}"/>
+    <text x="${X(h.col / 3) + 94}" y="${Y(h.row / 3) + 18}" text-anchor="end" font-size="12" font-weight="700" fill="#E7EDF0">${Math.round(h.ratio * 100)}%</text>`);
+  H.points.forEach(([x, y, t]) => s += `<circle cx="${X(x)}" cy="${Y(y)}" r="3.2" fill="${tcol(t)}" opacity=".8"/>`);
+  if (!H.count) s += `<text x="160" y="115" text-anchor="middle" font-size="13" fill="#93A3AD">위치가 기록된 불량이 아직 없어요</text>`;
+  heat.innerHTML = s;
+  const types = [...new Set(H.points.map(p => p[2]))];
+  heatLeg.innerHTML = types.map(t => `<span><i style="background:${tcol(t)}"></i>${esc(t)}</span>`).join("");
+  const cmap = Object.fromEntries(Q.causes.map(c => [c.type, c]));
+  hotList.innerHTML = H.hot.slice(0, 2).map(h => `<div style="background:var(--panel2);border-radius:8px;padding:8px 10px">
+    <b style="color:${tcol(h.type)}">${esc(h.where)} ${Math.round(h.ratio * 100)}%</b>
+    <div class="mini">${esc(h.type)}가 가장 많음${cmap[h.type] ? " → " + esc(cmap[h.type].check) : ""}</div></div>`).join("") || '<div class="mini">불량이 쌓이면 많이 나오는 위치를 알려 드려요</div>';
+}
+
+// p 관리도
+function drawP() {
+  const T = Q.trend, W = 600, Hh = 230, L = 44, R = 590, B = 190, TP = 15;
+  if (!T.length) { pchart.innerHTML = '<div class="empty">아직 오늘 검사 기록이 없어요</div>'; pNote.textContent = ""; return; }
+  const mx = Math.max(0.1, ...T.map(t => Math.max(t.rate, t.ucl || 0))) * 1.1, y = v => B - v / mx * (B - TP), step = (R - L) / T.length, cx = i => L + step * i + step / 2;
+  let s = "";
+  for (let i = 0; i <= 4; i++) { const v = mx * i / 4; s += `<line x1="${L}" x2="${R}" y1="${y(v)}" y2="${y(v)}" stroke="#1E2A31"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end" font-size="10" fill="#93A3AD">${(v * 100).toFixed(1)}%</text>`; }
+  s += `<polyline points="${T.map((t, i) => `${cx(i)},${y(t.ucl)}`).join(" ")}" fill="none" stroke="#F0605D" stroke-width="2" stroke-dasharray="6 4"/>`;
+  s += `<line x1="${L}" x2="${R}" y1="${y(Q.limit)}" y2="${y(Q.limit)}" stroke="#F5B544" stroke-width="2" stroke-dasharray="3 4"/>`;
+  s += `<path d="M${cx(0)} ${B} ${T.map((t, i) => `L${cx(i)} ${y(t.rate)}`).join(" ")} L${cx(T.length - 1)} ${B} Z" fill="#4CC3FF" opacity=".12"/>`;
+  s += `<polyline points="${T.map((t, i) => `${cx(i)},${y(t.rate)}`).join(" ")}" fill="none" stroke="#4CC3FF" stroke-width="2.5"/>`;
+  T.forEach((t, i) => { s += `<circle cx="${cx(i)}" cy="${y(t.rate)}" r="${t.out ? 6 : 4}" fill="${t.out ? "#F0605D" : t.warn ? "#F5B544" : "#4CC3FF"}" stroke="#0E1317" stroke-width="2"><title>${t.hour}시 · ${t.defects}/${t.total} · ${(t.rate * 100).toFixed(1)}% (한계 ${(t.ucl * 100).toFixed(1)}%)</title></circle>`;
+    if (t.out) s += `<text x="${cx(i)}" y="${y(t.rate) - 10}" text-anchor="middle" font-size="11" font-weight="700" fill="#FFB3B0">이상</text>`;
+    s += `<text x="${cx(i)}" y="${B + 18}" text-anchor="middle" font-size="11" fill="#93A3AD">${t.hour}시</text>`; });
+  pchart.innerHTML = `<svg viewBox="0 0 ${W} ${Hh}" style="width:100%;display:block" font-family="IBM Plex Sans KR, sans-serif" role="img" aria-label="불량률 관리도">${s}</svg>`;
+  const out = T.filter(t => t.out).map(t => t.hour + "시"), warn = T.filter(t => t.warn && !t.out).map(t => t.hour + "시");
+  pNote.textContent = (out.length ? `관리 한계를 넘은 시간 = 우연이 아닌 이상 신호 (${out.join(" · ")}). ` : "관리 한계를 넘은 시간 없음 (공정 안정). ") +
+    (warn.length ? `기준만 넘은 시간은 주의 (${warn.join(" · ")})` : "") + ` · 중심선 ${(Q.pbar * 100).toFixed(1)}%`;
+}
+
+// 파레토 (많은 순 막대 + 누적 비율 선)
+function drawPareto() {
+  const C = Q.causes.filter(c => c.count > 0), W = 420, Hh = 232, L = 40, R = 400, B = 190, TP = 20;
+  if (!C.length) { pareto.innerHTML = '<div class="empty">아직 오늘 불량이 없어요</div>'; parNote.textContent = ""; return; }
+  const mx = Math.max(...C.map(c => c.count)) * 1.2, y = v => B - v / mx * (B - TP), yc = p => B - p * (B - TP);
+  const slot = (R - L - 60) / Math.max(C.length, 2), bw = Math.min(90, slot * 0.6);
+  let s = "", pts = [];
+  for (let i = 0; i <= 3; i++) { const v = mx * i / 3; s += `<line x1="${L}" x2="${R}" y1="${y(v)}" y2="${y(v)}" stroke="#1E2A31"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end" font-size="10" fill="#93A3AD">${Math.round(v)}</text>`; }
+  C.forEach((c, i) => { const x = L + 20 + i * slot + (slot - bw) / 2;
+    s += `<rect x="${x}" y="${y(c.count)}" width="${bw}" height="${B - y(c.count)}" rx="4" fill="${tcol(c.type)}" opacity=".85"/>
+      <text x="${x + bw / 2}" y="${y(c.count) - 8}" text-anchor="middle" font-size="13" font-weight="700" fill="#E7EDF0">${c.count}</text>
+      <text x="${x + bw / 2}" y="${B + 18}" text-anchor="middle" font-size="12" fill="#C9D3D9">${esc(c.type)}</text>`;
+    pts.push([x + bw / 2, yc(c.cum), c.cum]); });
+  s += `<polyline points="${pts.map(p => p[0] + "," + p[1]).join(" ")}" fill="none" stroke="#F5B544" stroke-width="2.5"/>` +
+       pts.map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="4" fill="#F5B544"/><text x="${p[0] - 8}" y="${p[1] - 8}" text-anchor="end" font-size="11" fill="#FFD58A">${Math.round(p[2] * 100)}%</text>`).join("");
+  if (Q.unsupported.length) s += `<text x="${L}" y="${B + 36}" font-size="10" fill="#6B7A84">${Q.unsupported.join(" · ")}: 지금 모델에 없는 유형</text>`;
+  pareto.innerHTML = `<svg viewBox="0 0 ${W} ${Hh}" style="width:100%;display:block" font-family="IBM Plex Sans KR, sans-serif" role="img" aria-label="불량 유형 파레토">${s}</svg>`;
+  parNote.textContent = `상위 1개 유형(${C[0].type})이 전체 불량의 ${Math.round(C[0].cum * 100)}% → 먼저 잡을 대상`;
+}
+
+function drawCauses() {
+  causes.innerHTML = Q.causes.map(c => `<div class="causebox" style="border-left-color:${tcol(c.type)}">
+      <b>${esc(c.type)} (${esc(c.name)}) ${n(c.count)}</b>${c.alert ? ` <span class="badge t-warn">10분에 ${c.recent}번 · 정비 추천</span>` : ""}
+      <div class="muted small" style="margin-top:4px">${esc(c.cause)} → ${esc(c.check)}</div></div>`).join("") +
+    `<div style="border:1px dashed var(--line);border-radius:10px;padding:8px 12px" class="muted small">${esc(Q.unsupported.join(" · "))}: 지금 모델에 없는 유형 (학습 데이터 추가 필요)</div>`;
+}
+
+// 검사 이력
+function drawRows() {
+  const lotOpts = hLotSel && !Q.lots.includes(hLotSel) ? [hLotSel, ...Q.lots] : Q.lots;
+  hLot.innerHTML = `<option value="">모든 LOT</option>` + lotOpts.map(l => `<option value="${l}" ${l === hLotSel ? "selected" : ""}>LOT ${l.split("-")[1]}</option>`).join("");
+  hCount.textContent = `${Q.rows.length}건 표시 · 확인 대기 ${Q.today.pending}`;
+  if (!pick || !Q.rows.some(r => r.id === pick)) { const p = Q.rows.find(r => r.disposition === "자동 격리") || Q.rows.find(r => r.result === "불량"); pick = p ? p.id : null; }
+  hRows.innerHTML = Q.rows.length ? Q.rows.map(r => { const bad = r.result === "불량", c = r.conf;
+    return `<tr class="${r.id === pick ? "sel" : ""}" onclick="choose(${r.id})">
+      <td class="mono">#${r.id}</td><td class="mono">${time(r.ts)}</td><td class="mono">…-${r.lot.split("-")[1]}${r.source === "sim" ? ' <span class="mini">시뮬</span>' : ""}</td>
+      <td class="${bad ? "c-bad" : "c-ok"}">${bad ? "■ 불량" : "● 정상"}</td><td>${esc(r.types.join(", ") || "-")}</td>
+      <td>${c == null ? '<span class="muted">-</span>' : `<div style="display:flex;align-items:center;gap:6px" title="${bad ? "결함 신뢰도" : "제품 확신도"}"><div class="qbar" style="flex:1;height:6px"><i style="width:${c * 100}%;background:${bad ? (c >= .8 ? "#F0605D" : c >= .65 ? "#F5B544" : "#93A3AD") : "#3A5A52"}"></i></div><span class="mono small ${bad ? "" : "muted"}">${c.toFixed(2)}</span></div>`}</td>
+      <td>${esc(r.where || "-")}</td><td>${dispBadge(r)}</td></tr>`; }).join("")
+    : '<tr><td colspan="8" class="muted">조건에 맞는 검사가 없어요</td></tr>';
+}
+function choose(id) { pick = id; drawRows(); drawDisp(); }
+hFilter.querySelectorAll("button").forEach(b => b.onclick = () => { hFilt = b.dataset.f; hFilter.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b)); pick = null; loadInfo(); });
+hLot.onchange = () => { hLotSel = hLot.value; pick = null; loadInfo(); };
+
+// 불량 확인 (검출 → 자동 격리 → 사람 확인 → 조치)
+function drawDisp() {
+  const r = Q.rows.find(v => v.id === pick);
+  if (!r || r.result !== "불량") { dispBox.innerHTML = `<h2>불량 확인</h2><div class="empty">검사 이력에서 불량을 고르면 여기서 확인해요</div>`; return; }
+  const d = r.disposition, checked = ["불량 확인", "오판 · 정상품", "정비 요청"].includes(d), acted = d === "정비 요청";
+  const st = (done, now) => done ? "done" : now ? "now" : "";
+  const b = r.box ? [Math.max(0, (r.box[0] - .25) / .5), Math.max(0, (r.box[1] - .2) / .7)] : null;
+  dispBox.innerHTML = `
+    <div><div class="small muted">선택한 불량</div><div style="font-size:20px;font-weight:700">#${r.id} · ${esc(r.types.join(", "))} ${confTxt(r.conf)} ${dispBadge(r)}</div></div>
+    <div class="step">
+      <div class="done"><div class="dot">✓</div>검출<div class="mini">${time(r.ts)}</div></div>
+      <div class="${d ? "done" : ""}"><div class="dot">${d ? "✓" : "2"}</div>자동 격리<div class="mini">${d ? "불량함으로 분기" : "기록 없음 (이전 기록)"}</div></div>
+      <div class="${st(checked, !checked)}"><div class="dot">${checked ? "✓" : "3"}</div>사람 확인<div class="mini">${checked ? esc(d) + (r.disp_ts ? " · " + hm(r.disp_ts) : "") : "대기 중"}</div></div>
+      <div class="${st(acted, false)}"><div class="dot">${acted ? "✓" : "4"}</div>조치<div class="mini">${acted ? "정비 요청" : "필요하면 정비"}</div></div></div>
+    <div style="display:grid;grid-template-columns:96px 1fr;gap:12px;align-items:center">
+      <svg viewBox="0 0 96 72" style="width:96px;border-radius:8px;background:#20272C"><rect x="10" y="8" width="76" height="56" fill="none" stroke="#F0605D" stroke-width="1.5"/>
+        ${b ? `<circle cx="${10 + Math.min(1, b[0]) * 76}" cy="${8 + Math.min(1, b[1]) * 56}" r="6" fill="none" stroke="#FFB3B0" stroke-width="2"/><circle cx="${10 + Math.min(1, b[0]) * 76}" cy="${8 + Math.min(1, b[1]) * 56}" r="2" fill="#FFB3B0"/>` : ""}</svg>
+      <div class="kv2"><span class="k">판정 구역</span><span>${esc(r.where || "-")}</span><span class="k">LOT</span><span class="mono">${esc(r.lot)}</span>
+        <span class="k">출처</span><span>${r.source === "sim" ? "시뮬레이션 기록" : "품질 카메라" + (r.model ? " · " + esc(r.model) : "")}</span></div></div>
+    <div class="row" style="gap:8px"><button class="btn" style="flex:1;border-color:var(--ok-bd);color:var(--ok-tx)" onclick="dispose('confirm')">✓ 진짜 불량</button>
+      <button class="btn" style="flex:1" onclick="dispose('false')">↺ 오판 · 정상품</button></div>
+    <button class="btn primary" onclick="dispose('ticket')">🔧 정비 요청 작성 (내용 자동 입력)</button>
+    <div class="small muted">'오판 · 정상품'은 재학습 목록(CSV)에 모여요. 불량 판정 기록 자체는 그대로 남아요.</div>`;
+}
+function dispose(action) {
+  fetch("/api/quality/dispose", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({id: pick, action})})
+    .then(r => r.json()).then(d => {
+      if (d.error) { alert(d.error); return; }
+      if (action === "ticket") { location.href = `/maintenance?equipment=${encodeURIComponent(d.ticket_equipment)}&text=${encodeURIComponent(d.ticket_text)}`; return; }
+      loadInfo();
+    });
+}
+loadInfo(); setInterval(loadInfo, 3000);
+poll(render);
+</script>
+{% endblock %}
