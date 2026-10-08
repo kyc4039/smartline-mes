@@ -1,0 +1,258 @@
+{% extends "base.html" %}
+{% block head %}
+<style>
+/* OEE · 설비 종합 효율 (클래스 이름은 oe- 로 시작: 다른 페이지 공통 스타일과 겹치지 않게) */
+.oe-r1{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:16px}
+.oe-r2{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:16px}
+.oe-r3{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr) minmax(0,1fr);gap:16px}
+.oe-hero{display:flex;gap:24px;align-items:center}
+.oe-eqn{display:flex;align-items:center;gap:10px}
+.oe-fac{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px;text-align:center;min-width:0}
+.oe-fac .l{font-size:12px;color:var(--muted)}.oe-fac .v{font-family:var(--mono);font-size:26px;font-weight:600;margin:4px 0}
+.oe-fac .d{font-size:11px;color:var(--muted)}.oe-fac .bar{height:6px;margin-top:6px}
+.oe-fac.low{border-color:var(--warn-bd);background:var(--warn-bg)}.oe-fac.low .v,.oe-fac.low .d{color:var(--warn-tx)}
+.oe-op{font-size:22px;color:var(--muted)}
+.oe-leg{display:flex;gap:12px;font-size:11px;color:var(--muted);flex-wrap:wrap}.oe-leg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.oe-wf{display:flex;flex-direction:column;gap:7px}
+.oe-wr{display:grid;grid-template-columns:170px minmax(0,1fr) 130px;gap:10px;align-items:center;font-size:13px}
+.oe-wr .tr{height:24px;background:#1B242A;border-radius:5px;position:relative;overflow:hidden}
+.oe-wr .tr i{position:absolute;top:0;bottom:0;border-radius:5px}
+.oe-wr .vv{font-family:var(--mono);font-size:12px;text-align:right}.oe-wr .vv small{color:var(--muted);font-family:inherit}
+.oe-wr.sub .lb{padding-left:16px;color:var(--muted)}
+.oe-opp{display:flex;flex-direction:column;gap:10px}
+.oe-oc{display:flex;gap:14px;align-items:center;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:var(--panel2);text-decoration:none;color:var(--text)}
+.oe-oc:hover{border-color:var(--data)}
+.oe-oc .rk{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex:none}
+.oe-oc .t{font-size:14px;font-weight:600}.oe-oc .s{font-size:12px;color:var(--muted)}
+.oe-oc .g{margin-left:auto;text-align:right;flex:none}.oe-oc .g b{display:block;font-family:var(--mono);font-size:22px;color:var(--ok-tx)}.oe-oc .g span{font-size:11px;color:var(--muted)}
+.oe-eqb{display:flex;flex-direction:column;gap:10px}
+.oe-er{display:grid;grid-template-columns:92px minmax(0,1fr) 52px;gap:10px;align-items:center;font-size:13px}
+.oe-er .bar{height:14px}.oe-er b{font-family:var(--mono);text-align:right}
+.oe-hm{display:grid;gap:3px;font-size:11px}
+.oe-hm .h{color:var(--muted);text-align:center}.oe-hm .rl{color:var(--muted);display:flex;align-items:center;white-space:nowrap}
+.oe-hm .c{height:28px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:10px;color:#0E1317;font-weight:600}
+.oe-sl{display:flex;flex-direction:column;gap:14px}
+.oe-sl label{display:flex;flex-direction:column;gap:6px;font-size:13px}
+.oe-sl label .row b{font-family:var(--mono)}
+.oe-sl input[type=range]{width:100%;accent-color:var(--data)}
+.oe-res{display:flex;align-items:center;gap:14px;padding:12px 14px;border-radius:12px;background:var(--ok-bg);border:1px solid var(--ok-bd)}
+.oe-res.dn{background:var(--panel2);border-color:var(--line)}
+.oe-res .v{font-family:var(--mono);font-size:30px;font-weight:600;color:var(--ok-tx)}
+@media (max-width:1200px){.oe-r1,.oe-r2,.oe-r3{grid-template-columns:minmax(0,1fr)}.oe-hero{flex-direction:column}}
+</style>
+{% endblock %}
+{% block body %}
+<div class="pg-head">
+  <h1>OEE · 설비 종합 효율</h1>
+  <span class="sub">얼마나 멈췄나(가용률) × 얼마나 빨랐나(성능) × 얼마나 잘 만들었나(품질)</span>
+  <div class="right seg-btns" id="seg"></div>
+</div>
+
+<div class="oe-r1">
+  <!-- ① 라인 OEE + 곱셈식 -->
+  <section class="panel" aria-label="라인 OEE">
+    <div class="row"><h2>라인 OEE</h2><span class="small muted" id="winLabel"></span></div>
+    <div class="oe-hero">
+      <div id="gauge" style="flex:none"></div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:12px;min-width:0">
+        <div class="oe-eqn">
+          <div class="oe-fac" id="fA"></div><div class="oe-op">×</div><div class="oe-fac" id="fP"></div><div class="oe-op">×</div><div class="oe-fac" id="fQ"></div>
+        </div>
+        <div class="small" id="lowNote" style="color:var(--warn-tx);min-height:18px"></div>
+        <div class="oe-leg"><span><i style="background:#3CC6A8"></i>세계 수준 85%</span><span><i style="background:#F5B544"></i>우리 목표 <span id="tgtTxt"></span></span></div>
+      </div>
+    </div>
+  </section>
+  <!-- ② 7일 추이 -->
+  <section class="panel" aria-label="OEE 추이">
+    <div class="row"><h2>OEE 추이 (최근 기록 7일)</h2><span class="small muted">점선 = 목표 · 85%</span></div>
+    <div id="trend"></div>
+    <div class="small muted" id="trendNote"></div>
+  </section>
+</div>
+
+<div class="oe-r2">
+  <!-- ③ 손실 폭포 -->
+  <section class="panel" aria-label="시간 손실">
+    <div class="row"><h2>시간 손실 폭포 (어디서 시간을 잃었나)</h2><span class="small muted" id="wfNote"></span></div>
+    <div class="oe-wf" id="wf"></div>
+    <div class="small" id="lostNote" style="color:var(--warn-tx);min-height:18px"></div>
+  </section>
+  <!-- ④ 개선 기회 -->
+  <section class="panel" aria-label="개선 기회">
+    <div class="row"><h2>개선 기회 TOP 3</h2><span class="small muted">이 손실이 없었다면 OEE가 얼마나 오를까</span></div>
+    <div class="oe-opp" id="opps"></div>
+  </section>
+</div>
+
+<div class="oe-r3">
+  <!-- ⑤ 설비별 가용률 -->
+  <section class="panel" aria-label="설비별 가용률">
+    <div class="row"><h2>설비별 가용률</h2><span class="small muted">낮을수록 라인을 많이 세움</span></div>
+    <div class="oe-eqb" id="eqb"></div>
+    <div class="small" id="worst" style="color:var(--warn-tx);min-height:18px"></div>
+  </section>
+  <!-- ⑥ 요일 × 시간 -->
+  <section class="panel" aria-label="요일 × 시간 OEE">
+    <div class="row"><h2>요일 × 시간 OEE 지도</h2><span class="oe-leg"><span><i style="background:#F0605D"></i>&lt;60</span><span><i style="background:#F5B544"></i>60~<span class="tgtN"></span></span><span><i style="background:#4CC3FF"></i>~85</span><span><i style="background:#3CC6A8"></i>85+</span></span></div>
+    <div class="oe-hm" id="oeHm"></div>
+    <div class="small" id="hmNote" style="color:var(--warn-tx);min-height:18px"></div>
+  </section>
+  <!-- ⑦ 가정 시뮬레이터 -->
+  <section class="panel" aria-label="가정 시뮬레이터">
+    <div class="row"><h2>가정 시뮬레이터</h2><span class="small muted">이렇게 바꾸면 OEE는? (선택한 기간 기준)</span></div>
+    <div class="oe-sl">
+      <label><span class="row"><span>안전 정지 시간 줄이기</span><b id="sSv">0%</b></span><input type="range" id="sS" min="0" max="100" step="10" value="50"></label>
+      <label><span class="row"><span>평균 사이클 (초/개)</span><b id="sCv">-</b></span><input type="range" id="sC" min="3.5" max="8" step="0.1" value="4.2"></label>
+      <label><span class="row"><span>불량률</span><b id="sDv">-</b></span><input type="range" id="sD" min="0" max="10" step="0.5" value="2"></label>
+      <div class="oe-res" id="sRes"><div><div class="small c-ok">예상 OEE</div><div class="v" id="sO">-</div></div><div class="small" style="color:var(--ok-tx)" id="sTxt"></div></div>
+      <button class="btn" id="sReset" style="align-self:flex-start;min-height:34px">지금 값으로 되돌리기</button>
+    </div>
+  </section>
+</div>
+
+<script>
+const RG = [["shift", "이번 교대"], ["today", "오늘"], ["prev", "어제 교대"], ["week", "최근 7일"]];
+let kind = new URLSearchParams(location.search).get("range") || "shift", D = null;
+function drawSeg() {
+  seg.innerHTML = RG.map(([k, n]) => `<button class="btn ${k === kind ? "on" : ""}" data-k="${k}">${n}</button>`).join("");
+}
+seg.onclick = e => { const b = e.target.closest("[data-k]"); if (!b) return; kind = b.dataset.k;
+  history.replaceState(null, "", "?range=" + kind); drawSeg(); simTouched = false; load(); };
+drawSeg();
+
+const pc = (v, d = 1) => v == null ? "-" : (v * 100).toFixed(d) + "%";
+const mn = s => s < 60 ? `${Math.round(s)}초` : s < 3600 ? `${Math.round(s / 60)}분` : `${Math.floor(s / 3600)}시간 ${Math.round(s % 3600 / 60)}분`;
+const colr = (v, T) => v == null ? "#1B242A" : v >= 0.85 ? "#3CC6A8" : v >= T ? "#4CC3FF" : v >= 0.6 ? "#F5B544" : "#F0605D";
+
+function gaugeSvg(d) {
+  const v = d.oee, C = 2 * Math.PI * 86, on = v == null ? 0 : v * C;
+  const tick = (p, c) => `<line x1="105" y1="8" x2="105" y2="30" stroke="${c}" stroke-width="3" transform="rotate(${p * 360} 105 105)"/>`;
+  const diff = d.prev != null && v != null ? v - d.prev : null;
+  const toT = v != null ? d.target - v : null;
+  const prevName = {shift: "어제 교대", today: "어제", prev: "그 전날"}[d.kind];
+  return `<svg width="210" height="210" viewBox="0 0 210 210" role="img" aria-label="라인 OEE ${pc(v)}">
+    <circle cx="105" cy="105" r="86" fill="none" stroke="#26323A" stroke-width="18"/>
+    <circle cx="105" cy="105" r="86" fill="none" stroke="${colr(v, d.target)}" stroke-width="18" stroke-linecap="round" stroke-dasharray="${on} ${C}" transform="rotate(-90 105 105)"/>
+    ${tick(d.target, "#F5B544")}${tick(d.world, "#3CC6A8")}
+    <text x="105" y="104" text-anchor="middle" fill="#E7EDF0" font-family="IBM Plex Mono, monospace" font-size="44" font-weight="600">${v == null ? "-" : (v * 100).toFixed(1)}</text>
+    <text x="105" y="128" text-anchor="middle" fill="#93A3AD" font-size="11">%${diff != null ? ` · ${prevName} 대비 ${diff >= 0 ? "▲" : "▼"}${Math.abs(diff * 100).toFixed(1)}%p` : ""}</text>
+    <text x="105" y="150" text-anchor="middle" fill="${toT > 0 ? "#FFD58A" : "#7FE3C8"}" font-size="12">${toT == null ? "" : toT > 0 ? `목표 ${pc(d.target, 0)}까지 ${(toT * 100).toFixed(1)}%p` : "목표 달성 ✓"}</text></svg>`;
+}
+
+function draw(d) {
+  D = d;
+  winLabel.textContent = d.label;
+  tgtTxt.textContent = pc(d.target, 0);
+  document.querySelectorAll(".tgtN").forEach(e => e.textContent = Math.round(d.target * 100));
+  gauge.innerHTML = gaugeSvg(d);
+
+  // ① 곱셈식: 가장 낮은 요소 강조
+  const parts = [["A", "가용률", d.availability, `정지 ${mn(d.stop_sec)}`],
+                 ["P", "성능", d.performance, d.avg_cycle ? `${d.avg_cycle.toFixed(1)}초/개 · 목표 ${d.cycle}초` : "검사 기록 없음"],
+                 ["Q", "품질", d.quality, d.total ? `불량 ${d.defects} / ${d.total}` : "검사 기록 없음"]];
+  const vals = parts.filter(p => p[2] != null), low = vals.length ? vals.reduce((a, b) => b[2] < a[2] ? b : a) : null;
+  parts.forEach(([k, n, v, sub]) => {
+    const el = document.getElementById("f" + k), isLow = low && low[0] === k && v < 0.95;
+    el.className = "oe-fac" + (isLow ? " low" : "");
+    el.innerHTML = `<div class="l">${n}</div><div class="v">${pc(v)}</div><div class="d">${esc(sub)}</div>
+      <div class="bar"><i style="width:${(v || 0) * 100}%;background:${isLow ? "var(--warn)" : k === "Q" ? "var(--ok)" : "var(--data)"}"></i></div>`;
+  });
+  const tip = {A: "정지를 줄이는 게", P: "속도를 높이는 게", Q: "불량을 줄이는 게"};
+  lowNote.innerHTML = d.oee == null ? (d.total ? "" : "아직 검사 기록이 없어 성능 · 품질을 계산할 수 없어요")
+    : low && low[2] < 0.95 ? `▲ 셋 중 <b>${low[1]}</b>이 가장 낮아요 → ${tip[low[0]]} OEE를 가장 많이 올립니다` : "세 요소 모두 95% 이상이에요 👍";
+
+  // ② 7일 추이
+  const T = d.trend, W = Math.max(420, trend.clientWidth || 520), H = 210, x0 = 40, x1 = W - 15, y = v => 180 - (v - 0.4) / 0.6 * 150;   // 칸 너비 그대로 (좌우 빈 곳 없음)
+  const xs = T.map((_, i) => T.length === 1 ? (x0 + x1) / 2 : x0 + 20 + i * (x1 - x0 - 40) / (T.length - 1));
+  const pts = T.map((t, i) => t.oee == null ? null : [xs[i], y(Math.max(0.4, t.oee))]);
+  const line = pts.filter(Boolean).map(p => p.join(",")).join(" ");
+  trend.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="width:100%;display:block" role="img" aria-label="최근 OEE 추이">
+    ${[1, 0.8, 0.6, 0.4].map(v => `<line x1="${x0}" y1="${y(v)}" x2="${x1 + 5}" y2="${y(v)}" stroke="#26323A"/><text x="${x0 - 6}" y="${y(v) + 4}" fill="#93A3AD" font-size="11" text-anchor="end">${v * 100}</text>`).join("")}
+    <line x1="${x0}" y1="${y(d.world)}" x2="${x1 + 5}" y2="${y(d.world)}" stroke="#3CC6A8" stroke-dasharray="5 4"/>
+    <line x1="${x0}" y1="${y(d.target)}" x2="${x1 + 5}" y2="${y(d.target)}" stroke="#F5B544" stroke-dasharray="5 4"/>
+    ${line ? `<polyline fill="none" stroke="#4CC3FF" stroke-width="3" points="${line}"/>` : ""}
+    ${T.map((t, i) => { const p = pts[i]; return (p ? `<circle cx="${p[0]}" cy="${p[1]}" r="${t.today ? 6 : 4}" fill="${t.today ? "#E7EDF0" : "#4CC3FF"}" stroke="#4CC3FF" stroke-width="${t.today ? 3 : 0}"/>
+        <text x="${p[0]}" y="${p[1] - 10}" fill="${t.today ? "#4CC3FF" : "#E7EDF0"}" font-size="11" font-family="IBM Plex Mono, monospace" text-anchor="middle">${Math.round(t.oee * 100)}</text>` : "")
+      + `<text x="${xs[i]}" y="200" fill="${t.today ? "#4CC3FF" : "#93A3AD"}" font-size="11" text-anchor="middle">${t.today ? "오늘" : t.dow + " " + t.md}</text>`; }).join("")}
+  </svg>`;
+  const best = T.filter(t => t.oee != null).reduce((a, b) => !a || b.oee > a.oee ? b : a, null);
+  trendNote.textContent = T.length ? `평균 ${pc(d.trend_avg)} · 최고 ${best ? pc(best.oee, 0) + ` (${best.today ? "오늘" : best.md})` : "-"} · 목표 달성 ${d.trend_hit} / ${T.length}일` : "기록이 쌓이면 보여요";
+
+  // ③ 손실 폭포
+  const wfd = d.waterfall, P = wfd.planned || 1, C = d.cycle;
+  wfNote.textContent = `계획 ${mn(wfd.planned)} → 좋은 제품을 만든 시간 ${mn(wfd.good)}`;
+  let right = 0;                                     // 오른쪽부터 깎아 내려감
+  const bar = (sec, col, sub) => { const w = sec / P * 100, l = 100 - right - w; if (!sub) right += w;
+    return `<div class="tr"><i style="left:${Math.max(0, l)}%;width:${Math.max(0.5, w)}%;background:${col}"></i></div>`; };
+  let subRight = 0;
+  const subBar = (sec, col) => { const w = sec / P * 100, l = 100 - subRight - w; subRight += w;
+    return `<div class="tr"><i style="left:${Math.max(0, l)}%;width:${Math.max(0.5, w)}%;background:${col}"></i></div>`; };
+  const goods = s => `<small> · ${Math.round(s / C)}개</small>`;
+  let h = `<div class="oe-wr"><span>계획 시간</span><div class="tr"><i style="left:0;width:100%;background:#33424C"></i></div><span class="vv">${mn(wfd.planned)}</span></div>`;
+  if (wfd.stop_sec > 0) {
+    h += `<div class="oe-wr"><span class="c-bad">− 정지 손실</span>${bar(wfd.stop_sec, "var(--bad)")}<span class="vv c-bad">${mn(wfd.stop_sec)}${goods(wfd.stop_sec)}</span></div>`;
+    h += wfd.stops.map(s => `<div class="oe-wr sub"><span class="lb">${esc(s.name === "짧은 정지" ? "짧은 정지(1분 미만)" : s.name)} · ${s.count}회</span>${subBar(s.sec, "#C93835")}<span class="vv">${mn(s.sec)}</span></div>`).join("");
+  }
+  h += `<div class="oe-wr"><span class="c-warn">− 속도 손실</span>${bar(wfd.speed, "var(--warn)")}<span class="vv c-warn">${mn(wfd.speed)}${goods(wfd.speed)}</span></div>`;
+  h += `<div class="oe-wr"><span style="color:#A8E2FF">− 품질 손실</span>${bar(wfd.quality, "#4CC3FF")}<span class="vv" style="color:#A8E2FF">${mn(wfd.quality)}${goods(wfd.quality)}</span></div>`;
+  h += `<div class="oe-wr"><b>= 좋은 제품 시간</b><div class="tr"><i style="left:0;width:${wfd.good / P * 100}%;background:var(--ok)"></i></div><span class="vv c-ok"><b>${mn(wfd.good)} = OEE</b></span></div>`;
+  wf.innerHTML = h;
+  lostNote.innerHTML = wfd.lost_goods ? `▲ 잃어버린 시간 = 양품 <b>${wfd.lost_goods.toLocaleString()}개</b> = 트럭 <b>${wfd.lost_trucks}대</b> 분량 (트럭 1대 = 양품 ${d.lot_good}개)` : "";
+
+  // ④ 개선 기회
+  const RK = ["background:var(--bad);color:#fff", "background:var(--warn);color:#2B2210", "background:#4CC3FF;color:#04202E"];
+  const PG = {"/safety": "설비 안전 제어", "/maintenance": "설비 보전", "/timeline": "타임라인", "/quality": "품질 관리"};
+  opps.innerHTML = d.opps.map((o, i) => `<a class="oe-oc" href="${o.link}"><div class="rk" style="${RK[i]}">${i + 1}</div>
+      <div style="min-width:0"><div class="t">${esc(o.title)}</div><div class="s">${esc(o.detail)} → ${PG[o.link] || ""}</div></div>
+      <div class="g"><b>+${(o.gain * 100).toFixed(1)}%p</b><span>OEE ${pc(o.oee)}</span></div></a>`).join("")
+    || `<div class="empty">${d.oee == null ? "검사 기록이 쌓이면 계산돼요" : "큰 손실이 없어요 👍"}</div>`;
+
+  // ⑤ 설비별 가용률
+  eqb.innerHTML = d.per_eq.map(e => { const v = e.availability, c = e.linked ? "#33424C" : v >= 0.95 ? "var(--ok)" : v >= 0.85 ? "var(--data)" : "var(--warn)";
+    return `<div class="oe-er"><span class="${e.linked ? "muted" : ""}">${esc(e.name)}</span><div class="bar"><i style="width:${(v || 0) * 100}%;background:${c}"></i></div>
+      <b class="${e.linked ? "muted" : v < 0.85 ? "c-warn" : ""}">${pc(v, 0)}</b></div>`; }).join("");
+  worst.textContent = d.worst ? `▲ 병목: ${d.worst.name} (안전 · 고장 정지 ${d.worst.bad}회) · 컨베이어는 연동으로 같이 멈춤` : "";
+
+  // ⑥ 요일 × 시간
+  const hm_ = d.heat;
+  const hmEl = document.getElementById("oeHm");
+  hmEl.style.gridTemplateColumns = `52px repeat(${hm_.hours.length || 1}, minmax(0,1fr))`;
+  hmEl.innerHTML = hm_.hours.length ? `<div></div>` + hm_.hours.map(x => `<div class="h">${x}</div>`).join("") +
+    hm_.rows.map(r => `<div class="rl" style="${r.label === "오늘" ? "color:#4CC3FF" : ""}">${esc(r.label)}</div>` +
+      hm_.hours.map((_, j) => { const v = r.cells[j]; return v == null ? `<div class="c" style="background:#1B242A"></div>`
+        : `<div class="c" style="background:${colr(v, d.target)}" title="${r.label} ${hm_.hours[j]}시 · OEE ${pc(v)}">${Math.round(v * 100)}</div>`; }).join("")).join("")
+    : '<div class="empty">기록이 쌓이면 보여요</div>';
+  hmNote.textContent = hm_.low && hm_.low.oee < d.target ? `▲ ${hm_.low.hour}시대가 평균 ${pc(hm_.low.oee, 0)}로 가장 낮음 → 그 시간 정지 · 작업 확인` : "";
+
+  // ⑦ 시뮬레이터 기본값 (처음 한 번 · 기간을 바꿀 때)
+  if (!simTouched) {
+    sC.value = d.avg_cycle ? Math.min(8, Math.max(3.5, d.avg_cycle)).toFixed(1) : d.cycle;
+    sD.value = d.quality != null ? Math.min(10, Math.round((1 - d.quality) * 200) / 2) : 2;
+    sS.value = 50;
+  }
+  sim();
+}
+
+// ---------- ⑦ 가정 시뮬레이터 (화면에서 바로 계산) ----------
+let simTouched = false;
+function sim() {
+  const d = D; if (!d) return;
+  const red = +sS.value / 100, cyc = +sC.value, dr = +sD.value / 100;
+  sSv.textContent = `−${Math.round(red * 100)}%`; sCv.textContent = cyc.toFixed(1); sDv.textContent = (dr * 100).toFixed(1) + "%";
+  if (!d.elapsed || d.oee == null) { sO.textContent = "-"; sTxt.textContent = "검사 기록이 쌓이면 계산돼요"; return; }
+  const A2 = Math.min(1, (d.run + d.sim.safety_sec * red) / d.elapsed);
+  const P2 = Math.min(1, d.cycle / cyc), Q2 = 1 - dr, O2 = A2 * P2 * Q2, diff = O2 - d.oee;
+  const perDay = d.sim.shift_sec / d.cycle * diff;          // 하루 교대 기준 양품 차이
+  sO.textContent = pc(O2);
+  sRes.className = "oe-res" + (diff < 0 ? " dn" : "");
+  sTxt.innerHTML = `${diff >= 0 ? "▲" : "▼"} 지금보다 ${diff >= 0 ? "+" : ""}${(diff * 100).toFixed(1)}%p<br>하루 양품 ${perDay >= 0 ? "+" : ""}${Math.round(perDay).toLocaleString()}개 · 트럭 ${perDay >= 0 ? "+" : ""}${(perDay / d.lot_good).toFixed(1)}대`;
+}
+[sS, sC, sD].forEach(el => el.oninput = () => { simTouched = true; sim(); });
+sReset.onclick = () => { simTouched = false; if (D) draw(D); sS.value = 0; simTouched = true; sim(); };   // 지금 값 = 예상 OEE가 지금과 같음
+
+const load = () => fetch("/api/oee/info?range=" + kind).then(r => r.json()).then(draw).catch(() => {});
+load(); setInterval(load, 15000);
+poll(() => {});
+</script>
+{% endblock %}
