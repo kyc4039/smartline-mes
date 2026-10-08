@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SMART LINE MES</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="/static/style.css">
+{% block head %}{% endblock %}
+<script src="/static/app.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#3CC6A8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21V10l5 3V10l5 3V6l8 4v11z"></path></svg>
+      <div><b>SMART LINE</b><div class="small muted">LINE A 관제</div></div>
+    </div>
+    <div id="linePill" class="pill t-idle">상태 확인 중</div>
+    <div class="row muted" style="gap:14px">
+      {% if session.get('entered') %}
+      <span class="small">{{ '관리자 입장' if session.get('by') == 'admin' else '보호구 확인 입장' }}</span>
+      <form method="post" action="/gate/exit" style="margin:0"><button class="btn" style="min-height:36px;padding:0 12px">퇴장</button></form>
+      {% endif %}
+      <a href="/system" class="small" title="시스템 점검" style="color:var(--muted)">⚙ 점검</a>
+      <span id="clock" class="clock" style="color:var(--text)"></span>
+    </div>
+  </header>
+  <nav class="tabs" aria-label="페이지">
+    {% set pages = [("/", "관제 대시보드"), ("/twin", "디지털 트윈"), ("/production", "생산 관리"), ("/quality", "품질 관리"), ("/safety", "설비 안전 제어"), ("/maintenance", "설비 보전"), ("/timeline", "타임라인"), ("/oee", "OEE"), ("/report", "교대 보고서"), ("/feedback", "AI 학습"), ("/demo", "시연 제어판")] %}
+    {% for href, name in pages if href.strip("/") not in hide_pages %}
+    <a href="{{ href }}" class="{{ 'on' if request.path == href }}" {% if request.path == href %}aria-current="page"{% endif %}>{{ name }}</a>
+    {% endfor %}
+  </nav>
+  {% block body %}{% endblock %}
+</div>
+</body>
+</html>
