@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block body %}
+<section class="grid g5" aria-label="현장 정확도">
+  <div class="kpi"><div class="small muted">현장 피드백</div><div class="v mono" id="kN">0</div><div class="small muted">정비 완료 시 확인한 판정</div></div>
+  <div class="kpi"><div class="small muted">담당 분야 정확도</div><div class="v mono" id="kType">-</div><div class="small muted">실제 담당과 같았던 비율</div></div>
+  <div class="kpi"><div class="small muted">조치 시점 정확도</div><div class="v mono" id="kUrg">-</div><div class="small muted">실제 조치 시점과 같았던 비율</div></div>
+  <div class="kpi" id="kMissBox"><div class="small muted">즉시 조치 놓침</div><div class="v mono" id="kMiss">0</div><div class="small muted" id="kMissSub">실제 즉시 조치 0건 중</div></div>
+  <div class="kpi"><div class="small muted">오경보</div><div class="v mono" id="kFa">0</div><div class="small muted">급하지 않은데 즉시로 판정</div></div>
+</section>
+
+<div class="grid split">
+  <section class="panel" aria-label="정확도 추이">
+    <div class="row"><h2>현장 정확도 추이</h2><span class="small muted" id="trendNote"></span></div>
+    <div id="trend" class="trend"></div>
+  </section>
+  <section class="panel" aria-label="조치 시점 혼동표">
+    <h2>조치 시점: 실제 vs AI</h2>
+    <div style="overflow-x:auto"><table class="conf" id="conf"></table></div>
+    <div class="small muted">대각선(같은 칸)이 정답. 즉시 행의 다른 칸은 <span class="c-bad">놓친 긴급 고장</span>, 즉시 열의 다른 칸은 <span class="c-warn">오경보</span></div>
+  </section>
+</div>
+
+<div class="grid split">
+  <section class="panel" aria-label="정비원이 고친 판정">
+    <div class="row"><h2>정비원이 고친 판정</h2><span class="small muted" id="corrN"></span></div>
+    <div id="corr" style="display:flex;flex-direction:column;gap:8px"></div>
+  </section>
+  <section class="panel" aria-label="재학습 데이터">
+    <h2>재학습 데이터</h2>
+    <div>
+      <div class="row small" style="margin-bottom:6px"><span>재학습 준비도</span><span class="mono" id="readyText"></span></div>
+      <div class="bar" style="height:12px"><i id="readyBar" style="width:0;background:var(--data)"></i></div>
+    </div>
+    <div class="small muted" id="readyMsg"></div>
+    <a class="btn primary" href="/api/feedback/export.csv" style="align-self:flex-start">학습 데이터 내보내기 (CSV)</a>
+    <ol class="steps small">
+      <li>내보낸 CSV를 <span class="mono">EM_model/data/field/</span>에 저장</li>
+      <li>처음에는 <b>평가용</b>으로 사용: 실제 현장 문장에서의 성능을 확인</li>
+      <li>충분히 쌓이면 학습 데이터에 더해 재학습 → dev로 비교 후 교체</li>
+    </ol>
+  </section>
+</div>
+
+<script>
+const U = {"상": "즉시", "중": "당일", "하": "정기"}, UT = {"상": "bad", "중": "warn", "하": "ok"};
+const TN = {"기계": "기계 정비", "전기": "전기·제어", "유압공압": "유공압", "센서": "센서·계측"};
+const P = v => v === null ? "-" : (v * 100).toFixed(1) + "%";
+
+function trendSvg(trend) {
+  if (trend.length < 2) return '<div class="empty">피드백이 2건 이상 쌓이면 추이가 그려져요</div>';
+  const W = 600, H = 200, L = 36, B = 24, n = trend.length;
+  const x = i => L + (W - L - 10) * (i / (n - 1)), y = v => 10 + (H - B - 10) * (1 - v);
+  const pts = trend.map((t, i) => `${x(i).toFixed(1)},${y(t.acc).toFixed(1)}`).join(" ");
+  const grid = [0, .5, 1].map(v => `<line x1="${L}" y1="${y(v)}" x2="${W - 10}" y2="${y(v)}" stroke="#26323A"/>
+      <text x="${L - 6}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="#93A3AD">${v * 100}%</text>`).join("");
+  const last = trend[n - 1];
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="최근 정확도 ${Math.round(last.acc * 100)}%">${grid}
+    <polyline points="${pts}" fill="none" stroke="#4CC3FF" stroke-width="2.5" stroke-linejoin="round"/>
+    <circle cx="${x(n - 1)}" cy="${y(last.acc)}" r="5" fill="#4CC3FF"/>
+    <text x="${L}" y="${H - 6}" font-size="11" fill="#93A3AD">1번째</text>
+    <text x="${W - 10}" y="${H - 6}" font-size="11" fill="#93A3AD" text-anchor="end">${n}번째 피드백</text></svg>`;
+}
+
+function render(s) {
+  kN.textContent = s.n;
+  kType.textContent = P(s.type_acc); kUrg.textContent = P(s.urg_acc);
+  kMiss.textContent = s.missed_urgent; kMissSub.textContent = `실제 즉시 조치 ${s.true_urgent}건 중`;
+  kMissBox.className = "kpi" + (s.missed_urgent ? " t-bad" : "");
+  kFa.textContent = s.false_alarm;
+  trendNote.textContent = s.n ? `최근 ${s.window}건 이동 평균 · 담당과 조치 시점 모두 맞은 비율` : "";
+  trend.innerHTML = trendSvg(s.trend);
+
+  conf.innerHTML = `<tr><th>실제 \\ AI</th>${["상", "중", "하"].map(a => `<th>${U[a]}</th>`).join("")}</tr>` +
+    ["상", "중", "하"].map(t => `<tr><th>${U[t]}</th>${["상", "중", "하"].map(a => {
+      const v = s.confusion[t][a], cls = !v ? "" : t === a ? "c-ok" : t === "상" ? "c-bad" : a === "상" ? "c-warn" : "";
+      return `<td class="mono ${cls}" style="${t === a ? "background:var(--panel2)" : ""}">${v}</td>`; }).join("")}</tr>`).join("");
+
+  corrN.textContent = s.corrections_n ? `총 ${s.corrections_n}건 · 최근 10건` : "";
+  corr.innerHTML = s.corrections.map(r => {
+    const tWrong = r.ai_type !== r.true_type, uWrong = r.ai_urgency !== r.true_urgency;
+    return `<div class="card" style="padding:10px 12px;display:flex;flex-direction:column;gap:6px">
+      <div class="row small muted"><span>#${r.ticket_id} · ${esc(r.equipment)}</span>${r.note ? `<span>${esc(r.note)}</span>` : ""}</div>
+      <div style="color:var(--text)">${esc(r.text)}</div>
+      <div class="small">${tWrong ? `<span class="muted"><s>${TN[r.ai_type]}</s></span> → <b>${TN[r.true_type]}</b>` : TN[r.true_type]}
+        &nbsp;·&nbsp; ${uWrong ? `<span class="muted"><s>${U[r.ai_urgency]}</s></span> → <b class="c-${UT[r.true_urgency]}">${U[r.true_urgency]}</b>` : U[r.true_urgency]}</div></div>`;
+  }).join("") || '<div class="empty">아직 고친 판정이 없어요. 정비 완료 때 "고쳐야 해요"를 고르면 여기에 쌓여요</div>';
+
+  readyText.textContent = `${s.n} / ${s.retrain_min}건`;
+  readyBar.style.width = pct(s.n, s.retrain_min) + "%";
+  readyMsg.textContent = s.n >= s.retrain_min ? "재학습을 시작해도 좋을 만큼 쌓였어요."
+    : `현장 문장 ${s.retrain_min - s.n}건이 더 쌓이면 재학습을 권장해요. 그중 고친 판정 ${s.corrections_n}건이 특히 귀한 데이터예요.`;
+}
+
+const load = () => fetch("/api/feedback/stats").then(r => r.json()).then(render).catch(() => {});
+load(); setInterval(load, 5000);
+poll(() => {});   // 상단 상태 표시만 갱신
+</script>
+{% endblock %}
