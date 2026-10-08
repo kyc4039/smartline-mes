@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SMART LINE · 작업장 입장</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="/static/style.css">
+<script src="/static/app.js"></script>
+<script src="/static/ppe.js"></script>
+</head>
+<body>
+<div class="login">
+  <header class="top">
+    <div class="brand">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#3CC6A8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21V10l5 3V10l5 3V6l8 4v11z"></path></svg>
+      <div><b>SMART LINE</b><div class="small muted">작업장 입장</div></div>
+    </div>
+    <div class="pill t-idle" id="gatePill">○ 보호구 확인 대기</div>
+    <div class="row" style="gap:12px;position:relative">
+      <!-- 관리자 우회 입장: 오른쪽 위 구석 작은 버튼 → PIN 창 -->
+      <button class="btn admin-btn" id="adminBtn" type="button" aria-expanded="false">🔑 관리자</button>
+      <div class="admin-pop" id="adminPop" hidden>
+        <div class="small muted" style="margin-bottom:8px">관리자 우회 입장 (카메라·모델이 없을 때)</div>
+        <form id="pinForm" class="row" style="justify-content:flex-start;gap:8px">
+          <label for="pin" class="small muted">PIN</label>
+          <input id="pin" type="password" inputmode="numeric" autocomplete="off" style="width:110px">
+          <button class="btn" type="submit">입장</button>
+        </form>
+        <div class="small c-bad" id="pinMsg"></div>
+      </div>
+      <span id="clock" class="clock"></span>
+    </div>
+  </header>
+
+  <main class="login-grid">
+    <section class="panel" aria-label="게이트 카메라">
+      <div class="row"><h2>CAM 1 · 게이트 입구</h2><span class="small muted mono" id="modelInfo"></span></div>
+      <div class="cam login-cam">
+        <img src="/gate/video" alt="게이트 입구 카메라">
+        <span class="lb"><span class="c-bad">●</span> LIVE</span>
+        <span id="guide" class="guide t-warn" style="display:none"></span>
+      </div>
+    </section>
+
+    <!-- 보호구 확인: 작업자 그림 + 항목 카드 + 착용 유지 막대 (카메라 박스와 같은 높이) -->
+    <section class="panel ppe-box" aria-live="polite">
+      <div class="row"><h2>보호구 확인</h2><span class="badge t-idle ppe-count" id="ppeCount">0 / 3</span></div>
+      <div class="ppe-main">
+        <div class="ppe-fig" id="ppeFig"></div>
+        <div class="ppe-list" id="items"></div>
+      </div>
+      <div class="hold">
+        <div class="row small"><span>3종 모두 확인 후 유지</span><span class="mono" id="holdText">0.0 / {{ "%.1f"|format(hold) }} s</span></div>
+        <div class="bar" style="height:12px"><i id="holdBar" style="width:0;background:var(--ok)"></i></div>
+        <div class="small muted" id="msg">안전모 · 조끼 · 장갑이 모두 확인되면 {{ hold }}초 뒤 자동으로 입장해요.</div>
+      </div>
+    </section>
+  </main>
+
+  <!-- 접속 직후 3초 안내 (누르면 바로 닫힘) -->
+  <div class="intro" id="intro" role="dialog" aria-label="안내">
+    <div class="intro-card">
+      <div class="small" style="color:#A8E2FF">안전 게이트 · 보호구가 곧 출입증입니다</div>
+      <div class="intro-title">보호구를 착용하고<br>카메라 앞에 서 주세요</div>
+      <div class="bar" style="height:6px;width:320px;margin:0 auto"><i id="introBar" style="width:100%;background:#4CC3FF"></i></div>
+      <div class="small muted" style="margin-top:8px">3초 뒤 자동으로 닫혀요</div>
+    </div>
+  </div>
+
+  <div class="welcome" id="welcome" hidden>
+    <div class="welcome-card">
+      <svg width="96" height="96" viewBox="0 0 96 96" aria-hidden="true"><circle cx="48" cy="48" r="44" fill="none" stroke="#3CC6A8" stroke-width="5" class="w-ring"/><path d="M28 50l13 13 27-29" fill="none" stroke="#3CC6A8" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" class="w-check"/></svg>
+      <div class="welcome-title">입장 허용</div>
+      <div class="muted" id="welcomeSub">보호구 3종 확인 완료</div>
+      <div class="small muted" id="welcomeCount"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const NEXT = {{ next|tojson }}, HOLD = {{ hold|tojson }}, BYE = {{ bye|tojson }}, PREVIEW = {{ (preview or False)|tojson }};
+// 퇴장 직후에는 카메라 앞을 한 번 벗어났다가(보호구 3종이 안 보이는 순간) 다시 서야 자동 입장
+let armed = !BYE;
+const ICON = {
+  "안전모": '<path d="M4 16a8 8 0 0 1 16 0v2H4zM12 8v3M9 8.5a5 5 0 0 1 6 0"/>',
+  "조끼": '<path d="M9 3 5 6v15h5v-9l2-3 2 3v9h5V6l-4-3c-1 2-5 2-6 0z"/>',
+  "장갑": '<path d="M8 21v-8l-2.5-3.5a1.2 1.2 0 0 1 2-1.4L9 10V5a1.2 1.2 0 0 1 2.4 0v5V4a1.2 1.2 0 0 1 2.4 0v6V5a1.2 1.2 0 0 1 2.4 0v7l.6-1.5a1.2 1.2 0 0 1 2.2 1L17 17v4z"/>',
+};
+const icon = n => `<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n] || '<circle cx="12" cy="12" r="8"/>'}</svg>`;
+let entering = false;
+
+// 화면 이름 → 그림 부위 · 색 (모델 클래스 이름이 달라도 화면 이름으로 연결)
+const PART = {"안전모": ["helmet", "#F5C542"], "조끼": ["vest", "#F28C28"], "장갑": ["gloves", "#4CC3FF"]};
+let figKey = null;
+function render(g) {
+  const labels = g.labels || {}, items = g.items || {}, keys = Object.keys(labels);
+  const on = {}; keys.forEach(k => { const p = PART[labels[k]]; if (p) on[p[0]] = !!items[k]; });
+  const key = JSON.stringify(on);
+  if (key !== figKey) { figKey = key; ppeFig.innerHTML = ppeFigure(on, 340); }     // 바뀔 때만 다시 그림
+  document.getElementById("items").innerHTML = keys.map(k => {
+    const ok = !!items[k], name = labels[k], col = (PART[name] || [0, "#3CC6A8"])[1];
+    return ok ? `<div class="ppe on" style="border-color:${col};background:${col}1A;color:${col}">${icon(name)}<div><div class="ppe-name">${esc(name)}</div><div class="small">● 착용 확인</div></div></div>`
+              : `<div class="ppe" style="border-style:dashed">${icon(name)}<div><div class="ppe-name">${esc(name)}</div><div class="small">○ 아직 안 보여요${name === "장갑" ? " · 손을 카메라 쪽으로" : ""}</div></div></div>`;
+  }).join("");
+  const n = keys.filter(k => items[k]).length;
+  ppeCount.textContent = `${n} / ${keys.length || 3}`;
+  ppeCount.className = "badge ppe-count t-" + (n && n === keys.length ? "ok" : n ? "warn" : "idle");
+  const h = g.all_on ? (g.hold_seconds || 0) : 0;
+  holdBar.style.width = pct(h, HOLD) + "%";
+  holdText.textContent = `${h.toFixed(1)} / ${Number(HOLD).toFixed(1)} s`;
+  const t = tone(g.status);
+  gatePill.className = "pill t-" + (g.status ? t : "idle");
+  gatePill.textContent = g.status ? `${shape(g.status)} ${g.status}` : "○ 보호구 확인 대기";
+  const missing = g.missing || [];
+  guide.style.display = missing.length && missing.length < Object.keys(labels).length ? "block" : "none";
+  guide.textContent = "카메라에 보여주세요: " + missing.join(" · ");
+  modelInfo.textContent = g.dummy ? "더미 모드 (모델 없음)" : "YOLO PPE";
+  if (!armed && !g.all_on) armed = true;
+  msg.textContent = g.dummy ? "게이트 모델이 없어 자동 입장을 할 수 없어요. 관리자 우회 입장을 사용하세요."
+                  : !armed ? "퇴장했습니다. 다시 입장하려면 카메라 앞을 벗어났다가 다시 서 주세요."
+                  : g.all_on ? `그대로 ${HOLD}초만 서 계세요 → 자동 입장` : `안전모 · 조끼 · 장갑이 모두 확인되면 ${HOLD}초 뒤 자동으로 입장해요.`;
+  if (g.allowed && armed && !entering) enter();
+}
+if (PREVIEW) {     // 시연 미리보기: 안내 표시 + 처음 3초 안내 화면 생략
+  const b = document.createElement("div");
+  b.className = "pill"; b.style.cssText = "position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#2A1E05;border-color:#C98A1B;color:#FFD58A;z-index:50";
+  b.style.display = "flex"; b.style.gap = "8px"; b.style.alignItems = "center";
+  b.innerHTML = `<span>▶ 시연 미리보기</span>
+    <button class="btn" style="min-height:32px;padding:0 10px;font-size:12px" data-ev="gate_ok">● 3종 착용</button>
+    <button class="btn" style="min-height:32px;padding:0 10px;font-size:12px" data-ev="gate_nohelmet">▲ 안전모 미착용</button>
+    <button class="btn" style="min-height:32px;padding:0 10px;font-size:12px" data-ev="gate_novest">▲ 조끼 미착용</button>
+    <a class="btn" style="min-height:32px;padding:0 10px;font-size:12px" href="/demo">시연 제어판</a>`;
+  b.onclick = e => { const x = e.target.closest("[data-ev]"); if (!x) return;
+    armed = true; entering = false; document.getElementById("welcome").hidden = true;
+    fetch("/api/demo/trigger", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({id: x.dataset.ev})})
+      .then(r => r.json()).then(j => { if (!j.ok) alert(j.msg || "시연 모드를 먼저 켜 주세요"); }); };
+  document.body.appendChild(b);
+}
+
+function enter() {
+  entering = true;
+  if (PREVIEW) { welcome("보호구 3종 확인 완료"); return; }     // 미리보기: 서버 입장 처리 없이 화면만
+  fetch("/api/gate/enter", {method: "POST"}).then(r => r.json())
+    .then(r => r.ok ? welcome("보호구 3종 확인 완료") : (entering = false)).catch(() => entering = false);
+}
+
+function welcome(sub) {
+  welcomeSub.textContent = sub;
+  document.getElementById("welcome").hidden = false;
+  let n = 3;
+  const step = () => { welcomeCount.textContent = `${n}초 후 ${NEXT === "/" ? "관제 대시보드" : "요청한 화면"}로 이동합니다`;
+                       if (n-- <= 0) location.href = NEXT; else setTimeout(step, 1000); };
+  step();
+}
+
+pinForm.addEventListener("submit", e => {
+  e.preventDefault();
+  fetch("/api/gate/bypass", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({pin: pin.value})})
+    .then(r => r.json()).then(r => { if (r.ok) { entering = true; welcome("관리자 우회 입장"); } else { pinMsg.textContent = r.reason; pin.value = ""; } });
+});
+
+// 관리자 버튼 → PIN 창 열고 닫기
+adminBtn.onclick = () => { adminPop.hidden = !adminPop.hidden; adminBtn.setAttribute("aria-expanded", !adminPop.hidden); if (!adminPop.hidden) pin.focus(); };
+document.addEventListener("click", e => { if (!adminPop.hidden && !e.target.closest("#adminPop, #adminBtn")) adminPop.hidden = true; });
+
+// 접속 직후 안내 3초 (퇴장 직후에는 띄우지 않음)
+const closeIntro = () => { intro.classList.add("hide"); setTimeout(() => intro.remove(), 300); };
+if (BYE || PREVIEW) intro.remove();
+else { intro.onclick = closeIntro; requestAnimationFrame(() => { introBar.style.transition = "width 3s linear"; introBar.style.width = "0%"; }); setTimeout(closeIntro, 3000); }
+
+const tick = () => fetch("/api/gate").then(r => r.json()).then(render).catch(() => {});
+tick(); setInterval(tick, 400);
+</script>
+</body>
+</html>
