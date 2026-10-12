@@ -1,204 +1,136 @@
 # SMART LINE MES
 
-AI가 작업자를 지키고, 제품을 검사하고, 고장 정비를 배정하는 작업라인 관제 웹입니다.
-비전 AI 3종(안전게이트 · 프레스 안전 · 품질검사)과 자연어 AI 1종(설비보전)을 Flask MES 하나로 묶었습니다.
+**AI 4종과 MES를 하나의 작업라인으로 묶은 관제 웹**
 
-| 담당 | 기능 | 모델 |
-|---|---|---|
-| 김태원 | ① 안전게이트: 안전모 · 조끼 · 장갑 확인 후 입장 | YOLOv8n |
-| 유장오 | ② 프레스 안전: 금형부에 손 · 공구가 들어오면 정지 | YOLO11s |
-| 백임수 | ③ 품질검사: 캔 양품 / 흠집 / 찌그러짐 판정 | YOLOv8 |
-| 김영창 | ④ 설비보전: 고장 보고 문장 → 담당 분야 · 조치 시점 + MES 통합 | KLUE 앙상블 |
+작업라인의 손실은 사람(안전), 제품(품질), 설비(보전) 세 곳에서 함께 생깁니다.
+SMART LINE은 비전 AI 3종과 자연어 AI 1종의 판정을 한 서버, 한 DB, 한 생산 장부로 모아
+9개 화면이 모두 같은 숫자를 보도록 만든 미니 MES입니다.
 
-모델 학습 기록은 [smartline-models](https://github.com/kyc4039/smartline-models) 저장소에 있습니다.
-
-## 처음 실행하기 (코드를 몰라도 따라 할 수 있게)
-
-> 처음 한 번만 1~5단계를 하면 되고, 다음부터는 **6단계(실행)**만 하면 됩니다.
-> 명령어는 한 줄씩 복사해서 붙여넣고 Enter를 누르세요.
-
-### 0. 터미널 열기
-
-| 윈도우 | 맥 |
+| 항목 | 내용 |
 |---|---|
-| 시작 메뉴에서 **PowerShell** 검색 → 실행 | Spotlight(⌘ + Space)에서 **터미널** 검색 → 실행 |
+| 과정 | 대한상공회의소 부산인력개발원 AI 스마트제조 융합인재 양성과정 팀 프로젝트 |
+| 기간 | 2026.09.29 ~ 10.07 (작업일 7일), 최종 발표 2026.10.08 |
+| 팀 | 4명 |
+| 기술 | Python 3.12, Flask, SQLite, JavaScript(프레임워크 없음), SVG, OpenCV, Ultralytics YOLO, PyTorch, TensorFlow, scikit-learn, uv |
 
-### 1. uv 설치 (파이썬 · 라이브러리 관리 도구)
+---
 
-파이썬을 따로 설치할 필요 없습니다. uv가 알아서 받습니다.
+## 역할 분담
 
-**윈도우 (PowerShell)**
-```powershell
-powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-```
-
-**맥 (터미널)**
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-설치가 끝나면 **터미널 창을 닫고 새로 연 다음** 아래를 입력해 버전이 나오면 성공입니다.
-```bash
-uv --version
-```
-
-### 2. 코드 내려받기
-
-먼저 코드를 저장할 폴더를 정하고(예: `D:\projects`, `문서` 폴더 등) 터미널에서 그 폴더로 이동합니다.
-
-```bash
-cd 저장할_폴더_경로
-```
-예) 윈도우 `cd D:\projects` · 맥 `cd ~/Documents`
-
-> **폴더 경로 쉽게 넣는 법**: `cd ` (cd와 띄어쓰기)까지 입력한 뒤, 탐색기(맥은 Finder)에서 그 폴더를 터미널 창으로 **끌어다 놓으면** 경로가 자동으로 입력됩니다.
-
-**방법 A — git이 있으면** (`git --version`이 나오면 있는 것)
-```bash
-git clone https://github.com/kyc4039/smartline-mes.git
-cd smartline-mes
-```
-> 윈도우에 git이 없으면 https://git-scm.com/download/win 에서 설치하거나 방법 B를 쓰세요.
-
-**방법 B — git 없이**
-1. 이 페이지 위쪽 초록색 **Code** 버튼 → **Download ZIP**
-2. 정한 폴더에 압축을 풀고, 폴더 이름을 `smartline-mes`로 바꾸기
-3. 터미널에서 그 폴더로 이동
-```bash
-cd smartline-mes
-```
-
-### 3. 라이브러리 설치 (처음 한 번 · 5~10분)
-
-```bash
-uv sync
-```
-torch · tensorflow 등을 받느라 시간이 걸립니다(약 2~3GB). 마지막에 오류 없이 끝나면 성공입니다.
-
-### 4. 내 PC 설정 파일 만들기
-
-**윈도우**
-```powershell
-copy config_local.example.py config_local.py
-```
-**맥**
-```bash
-cp config_local.example.py config_local.py
-```
-메모장(맥은 텍스트 편집기)으로 `config_local.py`를 열어 필요한 것만 고칩니다.
-- `ADMIN_PIN`: 팀에서 정한 관리자 PIN (팀장에게 받기)
-- `CAMERAS`: 카메라 번호 — 모르면 그대로 두고 실행 후 **시스템 점검 > 카메라 번호 찾기**로 확인
-- 맥이면 `# PORT = 5001` 앞의 `# `를 지워서 켜기 (맥은 5000번을 AirPlay가 씀)
-
-### 5. 모델 파일 넣기 (선택)
-
-모델이 없어도 화면 · 디지털 트윈 · 시연은 모두 동작합니다(더미 모드). 실제 AI 판정을 하려면 팀 드라이브에서 받아 넣으세요.
-
-| 받을 파일 | 넣을 위치 |
+| 담당 | 맡은 부분 |
 |---|---|
-| 안전게이트 `best.pt` | `model_files/gate/best.pt` |
-| 품질검사 `best.pt` | `model_files/quality/best.pt` |
-| 프레스 안전 `best.pt` | `model_files/safety/best.pt` |
-| `smartline_maintenance_model.zip` | `model_files/` 안에서 압축 풀기 → `model_files/maintenance/VERIFIED.txt`가 보이면 정상 |
+| **김영창 (팀장)** | **전체 통합 구조 설계, MES 웹(서버 · DB · 9개 화면), 디지털 트윈, 연동 규칙, ④ 설비보전 AI** |
+| 김태원 | ① 안전게이트 모델 (YOLOv8n) |
+| 유장오 | ② 프레스 안전 모델 (YOLO11s) |
+| 백임수 | ③ 품질검사 모델 (YOLOv8) |
 
-### 6. 실행
-
-```bash
-uv run app.py
-```
-`Running on http://127.0.0.1:5000` 같은 글자가 나오면 브라우저(크롬 권장)에서 **http://localhost:5000** 접속 (맥에서 5001로 바꿨으면 5001).
-
-- 첫 화면은 **안전 게이트**입니다. 카메라가 없으면 아래 **관리자 우회 입장**에 PIN을 넣고 들어가세요 (설정 안 했으면 `0000`).
-- 끄기: 터미널에서 **Ctrl + C**
-- 다음부터는 터미널에서 `smartline-mes` 폴더로 이동(`cd 저장한_폴더_경로/smartline-mes`) 후 `uv run app.py`만 하면 됩니다.
-
-### 7. 최신 버전 받기
-
-```bash
-git pull
-uv sync
-```
-(ZIP으로 받았다면 다시 내려받아 덮어쓰되, `config_local.py`와 `model_files/`는 옮겨 두세요.)
-
-### 8. 시연용 기록 넣기 (발표 전 선택)
-
-처음 실행하면 기록이 없어 OEE 7일 추이 · 정비 지표(MTTR · MTBF) · 요일 × 시간 지도가 비어 있습니다. 발표 전에 한 번 실행하면 최근 평일 7일치 기록이 채워집니다.
-
-```bash
-# 서버를 끈 상태(Ctrl + C)에서
-uv run python tools/seed_demo_data.py
-uv run app.py
-```
-- 기존 `smartline.db`는 `smartline.db.bak_날짜시각`으로 보관되고 새 DB가 만들어집니다. 되돌리려면 서버를 끄고 `smartline.db`를 지운 뒤 백업 파일 이름을 `smartline.db`로 바꾸세요.
-- 오늘 기록은 교대 시작부터 실행 3분 전까지만 들어가고, 그 뒤는 카메라 · 시뮬레이터가 이어서 기록합니다. 발표 당일에 실행하는 것이 가장 자연스럽습니다.
-- `--days 10` (평일 10일), `--no-today` (오늘은 비워 두기)
-
-### 문제가 생기면
-
-| 증상 | 해결 |
+| AI | 하는 일 |
 |---|---|
-| `uv`를 찾을 수 없음 / 'uv' is not recognized | 터미널을 **닫고 새로 열기**. 그래도 안 되면 1단계 다시 |
-| PowerShell에서 "스크립트를 실행할 수 없습니다" | 1단계 명령을 그대로(앞의 `powershell -ExecutionPolicy ByPass` 포함) 다시 실행 |
-| `uv sync`가 오래 걸림 | 정상입니다 (처음 5~10분). 인터넷 연결 확인 |
-| `Address already in use` / 포트 사용 중 | `config_local.py`에 `PORT = 5001` 넣고 다시 실행 |
-| 화면에 `NO CAMERA` | 카메라 번호가 다름 → 시스템 점검 > 카메라 번호 찾기 → `config_local.py`의 `source` 수정 → 다시 실행 |
-| 맥에서 카메라가 안 켜짐 | 시스템 설정 > 개인정보 보호 및 보안 > 카메라 → 터미널 허용 |
-| 정비 AI가 전부 '정기 점검' | 설비보전 모델 없음 → 5단계 확인 (`model_files/maintenance/maintenance/`처럼 폴더가 두 번 생기지 않았는지) |
-| `config_local.py`를 고쳤는데 그대로 | Ctrl + C로 끄고 `uv run app.py` 다시 실행 |
+| ① 안전게이트 | 안전모 · 조끼 · 장갑이 2초 연속 보이면 입장 |
+| ② 프레스 안전 | 금형부 위험구역에 손 · 공구가 들어오면 즉시 정지, 경고 구역은 알림 |
+| ③ 품질검사 | 캔을 양품 / 흠집 / 찌그러짐으로 판정해 불량 분기 |
+| ④ 설비보전 | 고장 보고 문장을 담당 분야 4종 × 조치 시점 3단계로 배정 (TF-IDF+LR · BiLSTM · KLUE 앙상블) |
 
-그래도 안 되면 터미널 화면 전체를 캡처해서 팀장에게 보내 주세요.
+설비보전 모델의 학습 과정은 [smartline-models](https://github.com/kyc4039/smartline-models)에 따로 정리했습니다.
 
-## 모델 파일 (저장소에 없음)
+---
 
-가중치는 아직 개선 중이라 저장소에 올리지 않습니다. 넣는 위치는 위 **5단계**와 [model_files/README.md](model_files/README.md)를 보세요.
-설비보전 모델이 `model_files/maintenance`에 없으면 옆 폴더 `../smartline-models/maintenance`에서 찾고, 그것도 없으면 더미 분류기로 동작합니다.
+## 시스템 구조
 
-## 설정
+```mermaid
+flowchart TB
+    A["① 입력<br/>USB 카메라 3대 · 작업자 음성/버튼"] --> B["② 수집 · 추론<br/>camera_worker (카메라 1대 = 스레드 1개, 10 FPS)<br/>YOLO × 3 · 설비보전 분류기"]
+    B --> C["③ 판정 · 연동<br/>modules/*.py judge() · rules.py (0.5초)<br/>line_flow.py 생산 장부"]
+    C --> D["④ 저장 · 서비스<br/>SQLite 6개 테이블 · Flask Blueprint 5개<br/>REST /api/* (JSON) · MJPEG 영상"]
+    D --> E["⑤ 화면<br/>Jinja2 · JavaScript · SVG 디지털 트윈<br/>9개 화면이 같은 장부를 polling"]
+```
 
-| 파일 | 내용 | 깃 |
-|---|---|---|
-| `config.py` | 공통 기준값 (판정 구역 · 택트 · 정비 계획 등) | 올림 |
-| `config_local.py` | PC마다 다른 값 (카메라 번호 · 관리자 PIN · SECRET_KEY · 포트) | **안 올림** |
+---
 
-`config_local.py`에 적은 값이 `config.py`를 덮어씁니다. 카메라 번호는 **시스템 점검 > 카메라 번호 찾기**에서 확인하세요.
+## 설계에서 신경 쓴 부분
+
+### 1. 숫자는 서버 한 곳에서 계산한다
+품질, 생산, 관제 화면이 불량률 · LOT 실적 · 라인 현황을 각자 계산하면 같은 라인을 두고도 숫자가 달라집니다.
+`line_flow.py`가 **검사 기록 1줄 = 상자 1개**로 보고 상자 → 팔레트(8개) → 트럭(10팔레트) → LOT까지 한 번만 계산하고,
+화면은 그 값을 그리기만 합니다. 서버와 화면 사이는 REST API로 나눠, 화면을 고쳐도 계산 로직은 건드리지 않습니다.
+
+### 2. 검사 결과가 다음 조치로 이어지게 한다
+`rules.py`가 0.5초마다 라인 전체를 확인합니다.
+
+| 규칙 | 동작 |
+|---|---|
+| 품질 → 보전 | 최근 50개 검사 중 불량률이 3%를 넘으면 정비 요청 알림 |
+| 설비 → 라인 | 설비가 하나라도 멈추면 컨베이어도 '연동 정지', 모두 복구되면 자동 재가동 (컨베이어 자체 고장은 자동 해제하지 않음) |
+| 보고 → 설비 | 고장 보고가 '즉시 조치'로 분류되면 해당 설비 정지 |
+
+품질 관리 화면에는 p 관리도와 불량 유형 파레토를 두고, 판정 결과를 진짜 불량 / 오판 / 정비 요청으로 나눠 처리합니다.
+
+### 3. 모델을 기다리지 않고 통합한다
+팀원들의 모델 학습이 마지막 날까지 이어졌기 때문에, 통합을 모델 완성 뒤로 미룰 수 없었습니다.
+카메라 연결 · 영상 전송 · DB 기록 · 화면은 공통 틀(`camera_worker.py`)이 맡고, 팀원은 **모델 파일과 판정 함수 `judge()`만** 넘기도록 나눴습니다.
+모델이 없으면 **더미 모드**로 화면과 연동이 계속 돌아가고, 모델이 개선되면 `best.pt` 파일 하나만 바꿔 끼웁니다.
+
+### 4. DB에는 바뀔 때만 기록한다
+매 프레임 판정은 메모리(`state.py`)에만 두고, 상태가 바뀐 순간과 검사 1건만 DB에 남겨 DB를 작고 빠르게 유지했습니다.
+
+---
 
 ## 화면
 
-| 주소 | 화면 |
-|---|---|
-| `/` | 관제 대시보드 |
-| `/twin` | 디지털 트윈 |
-| `/gate` | 안전 게이트 (입장) |
-| `/production` | 생산 관리 (LOT · 팔레트 · 트럭) |
-| `/quality` | 품질 관리 |
-| `/safety` | 설비 안전 제어 |
-| `/maintenance` | 설비 보전 (고장 보고 · 정비 티켓) |
-| `/oee` | 설비 종합 효율 |
-| `/demo` | 시연 제어판 (어느 화면에서나 Shift+D 리모컨) |
-| `/system` | 시스템 점검 (카메라 · 모델 · 발표 준비 점수) |
-| `/timeline` · `/report` · `/feedback` | 타임라인 · 교대 보고서 · AI 학습 피드백 (메뉴에서는 숨김) |
+| 주소 | 화면 | 보여주는 것 |
+|---|---|---|
+| `/` | 관제 대시보드 | 페이지별 핵심 숫자, 지금 할 일, 오늘 설비 상태 |
+| `/twin` | 디지털 트윈 | SVG 등각 라인 위로 상자 · 로봇 · 팔레트 · 트럭 이동 |
+| `/production` | 생산 관리 | LOT · 팔레트 · 트럭, 계획 대비 마감 예측, 정지로 잃은 생산 |
+| `/quality` | 품질 관리 | p 관리도, 불량 파레토, 판정 상세, 불량품 처리 |
+| `/oee` | 설비 종합 효율 | 가용률 × 성능 × 품질, 손실 폭포, 개선 기회 TOP 3 |
+| `/maintenance` | 설비 보전 | 고장 보고 → AI 배정 → 정비 티켓, MTTR · MTBF |
+| `/safety` | 설비 안전 제어 | 위험구역 판정, 비상 정지 · 수동 재가동 · 정비 잠금 |
+| `/gate` | 안전 게이트 | 보호구 확인 후 입장 |
+| `/demo` | 시연 제어판 | 8단계 시연 시나리오 (Shift+D 리모컨) |
+
+---
+
+## 빠른 실행
+
+```bash
+git clone https://github.com/kyc4039/smartline-mes.git
+cd smartline-mes
+uv sync                                   # 처음 한 번 (torch · tensorflow 포함, 5~10분)
+cp config_local.example.py config_local.py
+uv run app.py                             # http://localhost:5000
+```
+
+- 카메라나 모델 파일이 없어도 더미 모드로 전체 화면과 시연이 동작합니다.
+- 카메라 없이 입장하려면 게이트 화면의 관리자 우회 입장을 사용합니다. PIN은 `config_local.py`의 `ADMIN_PIN`이며, 교육용 기본값(`0000`)은 실제 환경에서는 반드시 바꿔야 합니다.
+- 윈도우 · 맥 단계별 설치, 모델 파일 위치, 문제 해결은 [docs/SETUP.md](docs/SETUP.md)에 있습니다.
+
+---
 
 ## 폴더 구조
 
 ```
 smartline-mes/
-├── app.py                서버 시작
-├── config.py             공통 설정
-├── config_local.example.py   PC별 설정 예시
-├── camera_worker.py · realsense.py · streaming.py   카메라 · 영상
-├── db.py · state.py · rules.py                      DB · 공유 상태 · 모듈 간 연동 규칙
-├── line_flow.py · production.py · demo_sim.py       제품 흐름 · 생산 장부 · 생산 시뮬레이터
-├── *_info.py · analytics.py · incidents.py          화면별 데이터
-├── maint_model.py        설비보전 분류기 (model_files/maintenance)
-├── demo_mode.py          시연 모드
-├── modules/              core · gate · quality · safety · maintenance (Flask 블루프린트)
-├── templates/ · static/  화면 HTML · CSS · JS (디지털 트윈: static/twin.js)
-├── tools/                점검 · 모델 복사 · 압축 도구
-├── model_files/          모델 가중치 (깃에 없음)
-└── docs/                 업데이트 기록
+├── app.py                    서버 시작 (4줄 흐름, 나머지는 rules.start())
+├── config.py                 공통 기준값 (판정 구역 · 불량률 기준 · 정비 계획)
+├── camera_worker.py          카메라 공통 틀 (detect → judge → draw → on_change)
+├── rules.py                  모듈 간 연동 규칙 (0.5초)
+├── line_flow.py · production.py   생산 장부 · LOT 계산
+├── analytics.py              설비 상태 구간 → 타임라인 → OEE
+├── *_info.py                 화면별 집계 (새 데이터를 저장하지 않고 DB를 다시 읽어 계산)
+├── db.py · state.py          SQLite 접근 · 실시간 공유 상태
+├── maint_model.py            설비보전 앙상블 분류기
+├── modules/                  Flask Blueprint (core · gate · quality · safety · maintenance)
+├── templates/ · static/      화면 (twin.js 디지털 트윈, flow.js 장부 polling)
+├── tools/                    환경 점검 · 모델 검증 · 시연 데이터 생성
+└── docs/                     설치 가이드 · 업데이트 기록
 ```
 
-## 주의
+---
 
-- `app.py`의 `use_reloader=False`를 바꾸지 마세요. 자동 재시작이 켜지면 카메라 워커가 두 번 실행되어 카메라가 충돌합니다.
-- `smartline.db`(기록)와 `safety_snaps/`(사진)는 실행하면 생기며 깃에 올리지 않습니다.
+## 한계와 다음 단계
+
+- **실제 설비 신호와 연결하지 않았습니다.** 설비 정지는 화면과 DB 상태로만 표현합니다. 다음 단계는 PLC 정지 신호 연동입니다.
+- **교육장 환경에서만 검증했습니다.** 현장 조명 · 진동에서 같은 판정 성능이 나오는지는 확인하지 않았습니다.
+- **단일 서버 · 단일 SQLite 구조입니다.** 쓰기는 잠금 하나로 순서를 보장하며, 여러 라인으로 확장하려면 DB 분리가 필요합니다.
+- **사용자 인증은 관리자 PIN 수준입니다.**
